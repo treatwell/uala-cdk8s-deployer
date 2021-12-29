@@ -1,0 +1,26 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+/iac-repo/
+
+# rspec failure tracking
+.rspec_status
+
+# Sample configuration file
+sample-config.yml
+sample-env
+# Ruby and IDE stuff
+.idea/
+
+# Used in integration tests
+draw-with-git/
+
+.env
+conf.yaml
+age_keys.txt
+.DS_Store

@@ -1,0 +1,120 @@
+---
+kind: pipeline
+type: docker
+name: notify-pipeline-start
+
+steps:
+  - name: slack
+    image: plugins/slack
+    pull: if-not-exists
+    settings:
+      webhook:
+        from_secret: SLACK_WEBHOOK
+      channel:
+        from_secret: SLACK_CHANNEL
+      link_names: true
+      # template source: https://gist.github.com/wzulfikar/e9064862d17467ed36b81d2f2c17389a
+      template: >
+        *Build started: {{ repo.owner }}/{{ repo.name }} - Build #{{ build.number }}* (type: `{{ build.event }}`)
+
+        Commit: <https://github.com/{{ repo.owner }}/{{ repo.name }}/commit/{{ build.commit }}|{{ truncate build.commit 8 }}>
+
+        Branch: <https://github.com/{{ repo.owner }}/{{ repo.name }}/commits/{{ build.branch }}|{{ build.branch }}>
+
+        Author: {{ build.author }}
+
+        <{{ build.link }}|Visit build page ↗>
+
+---
+kind: pipeline
+type: docker
+name: build-docker-image
+
+steps:
+  - name: build-docker-image
+    image: plugins/docker
+    pull: if-not-exists
+    settings:
+      repo: ${DRONE_REPO,,}
+      tags:
+        - ${DRONE_SOURCE_BRANCH/\//-}
+        - ${DRONE_SOURCE_BRANCH/\//-}-${DRONE_COMMIT_SHA:0:8}
+      cache_from:
+        - ${DRONE_REPO,,}:${DRONE_SOURCE_BRANCH/\//-}
+      username:
+        from_secret: DOCKER_USERNAME
+      password:
+        from_secret: DOCKER_PASSWORD
+
+---
+kind: pipeline
+type: docker
+name: notify-pipeline-end
+
+steps:
+  - name: slack
+    image: plugins/slack
+    pull: if-not-exists
+    settings:
+      webhook:
+        from_secret: SLACK_WEBHOOK
+      channel:
+        from_secret: SLACK_CHANNEL
+      link_names: true
+      template: >
+        *{{#success build.status}}✔{{ else }}✘{{/success}} {{ uppercasefirst build.status }}: {{ repo.owner }}/{{ repo.name }} - Build #{{ build.number }}* (type: `{{ build.event }}`)
+
+        Commit: <https://github.com/{{ repo.owner }}/{{ repo.name }}/commit/{{ build.commit }}|{{ truncate build.commit 8 }}>
+
+        Branch: <https://github.com/{{ repo.owner }}/{{ repo.name }}/commits/{{ build.branch }}|{{ build.branch }}>
+
+        Author: {{ build.author }}
+
+        Duration: {{ since build.created }}
+
+        <{{ build.link }}|Visit build page ↗>
+
+
+depends_on:
+- build-docker-image
+
+trigger:
+  status:
+  - success
+  - failure
+
+---
+kind: secret
+name: SLACK_WEBHOOK
+get:
+  path: slack-webhook
+  name: backend_url
+---
+kind: secret
+name: SLACK_CHANNEL
+get:
+  path: slack-webhook
+  name: backend_channel
+---
+kind: secret
+name: DOCKER_USERNAME
+get:
+  path: docker-credentials
+  name: username
+---
+kind: secret
+name: DOCKER_PASSWORD
+get:
+  path: docker-credentials
+  name: password
+---
+kind: secret
+name: dockerconfigjson
+get:
+  path: docker-credentials
+  name: dockerconfigjson
+---
+kind: signature
+hmac: a99348bb2060b9cbe2fcaaaeee8df0812a20ec9c4bb09f81b1f96119433c14e1
+
+...
