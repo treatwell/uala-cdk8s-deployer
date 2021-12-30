@@ -284,6 +284,12 @@ class DeployerController
         namespace_yaml = "iac-repo/applications/dist/*-namespaces-#{env['name']}.k8s.yaml"
         env_compiled_yamls = yaml_files.select { |f| env['namespaces'].any? { |n| f.include?(n) } }.sort
 
+        if (empty_yamls = env_compiled_yamls.reject { |f| YAML.load_file(f) }).any?
+          puts "\nSkipping these files as they are empty:".yellow
+          puts empty_yamls
+          env_compiled_yamls -= empty_yamls
+        end
+
         puts "\nThese files will be deployed:".yellow
         puts namespace_yaml
         puts env_compiled_yamls
