@@ -8,6 +8,7 @@ require 'deep_merge'
 require 'colorize'
 require 'logger'
 require 'tty-command'
+require 'json'
 
 class DeployerController
   attr_reader :logger
@@ -258,8 +259,10 @@ class DeployerController
       end
 
       puts "\nRun cdk8s...".green
+      cluster_version = rancher_get_cluster_version
+      puts "Cluster version: #{cluster_version}".yellow
       result = shell.run!("cd iac-repo/applications/ && \
-      npm run build")
+      npm run build", env: {K8S_VERSION: cluster_version})
 
       if result.failed?
         if result.err.include?('trouble decrypting file')
@@ -472,5 +475,20 @@ class DeployerController
     namespaces = ascii_table_to_array(result.out)
     return namespaces
   end
+
+  def rancher_get_cluster_version
+    result = shell.run!("rancher kubectl version --output=json")
+
+    if result.failed?
+      puts "[ERROR][RANCHER] #{result.err}".red
+      exit(1)
+    end
+
+    server_version = JSON.load(result.out)['serverVersion']
+    return server_version['major'] + "." + server_version['minor']
+  end
+
+
+
 
 end
