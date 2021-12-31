@@ -20,7 +20,7 @@ In order to use this tool, some environment variables are required:
 * `DEPLOY_ASK_CONFIRM`: Ask for a user confirm before deploy (ex. `true`)
 
 You can run it with docker with:
-`docker run -it --env-file .env uala/cdk8s-deployer`
+`docker run -it --env-file $PWD/.env -v $PWD/conf.yaml:/usr/src/app/conf.yaml uala/cdk8s-deployer`
 
 ### Configuration file
 This tool can be run also with a conf file (using `DEPLOY_CONF_FILE` env).
@@ -88,6 +88,9 @@ At this time the tool supports only the deploy with Rancher, plain `kubectl` wil
 ## Development
 
 After checking out the repo, run `bundle install` to install dependencies.
+
+Run with `ruby deployer.rb`
+
 
 ## Contributing
 
