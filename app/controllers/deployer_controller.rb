@@ -131,8 +131,12 @@ class DeployerController
   def step_2
     puts "\nStep 2: Clone iac-repo...".light_yellow
     @g = Git.clone("https://#{ENV['GIT_IAC_TOKEN']}@#{ENV['GIT_IAC_REPO']}", "iac-repo", {branch: ENV['GIT_IAC_BRANCH']})
-    shell_to_output.run!("cd iac-repo/applications/ && \
+    result = shell.run!("cd iac-repo/applications/ && \
     npm install")
+    if result.failed?
+      puts "[ERROR][CDK8S-INSTALL] #{result.err}".red
+      exit(1)
+    end
     puts "OK."
   end
 
