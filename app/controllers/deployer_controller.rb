@@ -169,7 +169,7 @@ class DeployerController
         #puts cl_app
         @envs_requested_to_deploy.each do |env|
           environment_name = env.keys[0]
-          if environment_name == cl_app['name'] || environment_name.include?(cl_app['name'])
+          if environment_name == cl_app['name']
             settings = c['settings'].merge(cl_app['settings'])
             settings['cluster_name'] = c['name']
             # add env only if not already exists
@@ -182,6 +182,13 @@ class DeployerController
           end
         end
       end
+    end
+
+    if @envs_to_deploy.count == 0
+      puts "\nNo environments found to deploy, exit.".green
+
+      puts "\nDONE!\n".blue
+      exit(0)
     end
 
     puts "Found #{@envs_to_deploy.count} environments to deploy:".green
