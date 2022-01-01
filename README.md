@@ -20,7 +20,9 @@ In order to use this tool, some environment variables are required:
 * `DEPLOY_ASK_CONFIRM`: Ask for a user confirm before deploy (ex. `true`)
 
 You can run it with docker with:
-`docker run -it --env-file $PWD/.env -v $PWD/conf.yaml:/usr/src/app/conf.yaml uala/cdk8s-deployer`
+```
+docker run -it --env-file $PWD/.env -v $PWD/conf.yaml:/usr/src/app/conf.yaml uala/cdk8s-deployer
+```
 
 ### Configuration file
 This tool can be run also with a conf file (using `DEPLOY_CONF_FILE` env).
@@ -66,6 +68,11 @@ clusters:
           rancher_project: "test-iac"
           rancher_access_key: <%= ENV['RANCHER_ACCESS_PROD_KEY_ENV'] %>
           rancher_secret_key: <%= ENV['RANCHER_SECRET_PROD_KEY_ENV'] %>
+    helm_repos:
+      - name: "bitnami"
+        url: "https://charts.bitnami.com/bitnami"
+      - name: "dandydev"
+        url: "https://dandydeveloper.github.io/charts"
 ```
 
 In the example above, the tool expects there are 2 environments in these paths:
@@ -83,6 +90,7 @@ At this time the tool supports only the deploy with Rancher, plain `kubectl` wil
 
 * `name`: It contains the exactly name of the cluster
 * `environments`: A list of environments the cluster should contain, based on the structure of the Iac Repo
+* `helm_repos`: A list of helm repositories that should be used by cdk8s for compile helm charts
 * `settings`: Useful settings for the tool, like rancher credentials and rancher project. This section can exist at cluster level or at application level, missing informations will be merged with cluster ones.
 
 ## Development
