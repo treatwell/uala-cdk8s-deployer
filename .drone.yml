@@ -45,6 +45,27 @@ steps:
         from_secret: DOCKER_USERNAME
       password:
         from_secret: DOCKER_PASSWORD
+    when:
+      event:
+        exlude:
+          - tag 
+
+  - name: build-docker-image-tag
+    image: plugins/docker
+    pull: if-not-exists
+    settings:
+      repo: ${DRONE_REPO,,}
+      tags:
+        - ${DRONE_TAG/\//-}
+      cache_from:
+        - ${DRONE_REPO,,}:master-${DRONE_COMMIT_SHA:0:8}
+      username:
+        from_secret: DOCKER_USERNAME
+      password:
+        from_secret: DOCKER_PASSWORD
+    when:
+      event:
+        - tag
 
 ---
 kind: pipeline
