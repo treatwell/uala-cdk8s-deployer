@@ -47,7 +47,7 @@ steps:
         from_secret: DOCKER_PASSWORD
     when:
       event:
-        exlude:
+        exclude:
           - tag 
 
   - name: build-docker-image-tag
