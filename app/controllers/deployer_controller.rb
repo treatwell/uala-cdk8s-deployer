@@ -131,6 +131,13 @@ class DeployerController
   def step_2
     puts "\nStep 2: Clone iac-repo...".light_yellow
     @g = Git.clone("https://#{ENV['GIT_IAC_TOKEN']}@#{ENV['GIT_IAC_REPO']}", "iac-repo", {branch: ENV['GIT_IAC_BRANCH']})
+    result = shell.run!("cd iac-repo && \
+    chmod +x install_dependencies.sh && \
+    ./install_dependencies.sh ")
+    if result.failed?
+      puts "[ERROR][DEPENDENCIES] #{result.err}".red
+      exit(1)
+    end
     result = shell.run!("cd iac-repo/applications/ && \
     npm install")
     if result.failed?
@@ -181,8 +188,7 @@ class DeployerController
             "name" => cl_app['name'],
             "cluster" => c['name'],
             "applications" => env[environment_name],
-            "settings" => settings,
-            "helm_repos" => c['helm_repos']
+            "settings" => settings
             }]
           end
         end
@@ -214,13 +220,6 @@ class DeployerController
         projects = rancher_login(env['settings'])
         project_id = rancher_select_project(env['settings'], projects)
         project_namespaces = rancher_list_ns
-
-        if env['helm_repos']
-          puts "\nAdding helm repos dependencies...".green
-          env['helm_repos'].each do | helm |
-            shell_to_output.run!("helm repo add #{helm['name']} #{helm['url']}")
-          end
-        end
 
         # search environment namespaces
         all_namespaces = []
