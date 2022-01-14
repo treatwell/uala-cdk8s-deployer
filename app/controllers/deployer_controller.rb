@@ -117,8 +117,10 @@ class DeployerController
     @envs_requested_to_deploy.each do |env|
       name = env.keys[0]
       puts "#{name.green}\n"
-      env[name].each do | app|
-        puts "  - #{app}\n"
+      if env[name]
+        env[name].each do | app|
+          puts "  - #{app}\n"
+        end
       end
     end
 
