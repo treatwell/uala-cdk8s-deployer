@@ -2,7 +2,7 @@ FROM rancher/cli2:v2.4.12 as ranchercli
 
 # FROM viaductoss/ksops:v3.0.1 as ksops-builder
 
-FROM ruby:2.6.2-slim AS ruby
+FROM ruby:2.7.5-slim AS ruby
 
 
 RUN apt-get update -qq && \

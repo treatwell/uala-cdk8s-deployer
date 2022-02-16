@@ -134,8 +134,8 @@ class DeployerController
     puts "\nStep 2: Clone iac-repo...".light_yellow
     @g = Git.clone("https://#{ENV['GIT_IAC_TOKEN']}@#{ENV['GIT_IAC_REPO']}", "iac-repo", {branch: ENV['GIT_IAC_BRANCH']})
     result = shell.run!("cd iac-repo && \
-    chmod +x install_dependencies.sh && \
-    ./install_dependencies.sh ")
+    chmod +x scripts/install_dependencies.sh && \
+    ./scripts/install_dependencies.sh ")
     if result.failed?
       puts "[ERROR][DEPENDENCIES] #{result.err}".red
       exit(1)
