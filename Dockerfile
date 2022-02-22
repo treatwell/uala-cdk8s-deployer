@@ -60,4 +60,4 @@ RUN gem install bundler && \
 COPY . .
 RUN chmod +x ./deployer.rb
 
-CMD ["./deployer.rb"]
+CMD ["/usr/src/app/deployer.rb"]
