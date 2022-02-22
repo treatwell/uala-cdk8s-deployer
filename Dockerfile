@@ -1,4 +1,4 @@
-FROM rancher/cli2:v2.4.12 as ranchercli
+FROM rancher/cli2:v2.6.0 as ranchercli
 
 # FROM viaductoss/ksops:v3.0.1 as ksops-builder
 
@@ -14,7 +14,7 @@ RUN apt-get update -qq && \
                        libpq-dev \
                        libssl-dev \
                        libcurl4-openssl-dev && \
-    curl -fsSL https://deb.nodesource.com/setup_12.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
     apt-get install -y nodejs
 
 RUN node -v
