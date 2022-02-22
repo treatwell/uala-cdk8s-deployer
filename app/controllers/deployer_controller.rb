@@ -228,12 +228,11 @@ class DeployerController
         namespaces = []
         File.open("iac-repo/applications/environments/#{env['name']}/applications_settings.yaml", "r+") do |yaml_file|
           yaml_content = YAML.load(yaml_file.read)
-          # puts yaml_content.to_yaml
-
+          #puts yaml_content.to_yaml
+          #puts project_id
           yaml_content.each do |app, settings|
-            # puts app
+            next if yaml_content[app].is_a? String || !yaml_content[app].has_key('projectId')
             # puts settings['namespace']
-            # puts env['applications']
 
             if !env['applications'] || (
                 env['applications'] &&
@@ -247,6 +246,7 @@ class DeployerController
             yaml_content[app]['projectId'] = project_id
           end
 
+          #puts yaml_content.to_yaml
           yaml_file.rewind
           yaml_file.write(yaml_content.to_yaml)
           yaml_file.truncate(yaml_file.pos)
