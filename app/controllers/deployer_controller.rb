@@ -82,23 +82,29 @@ class DeployerController
     end
 
     if ENV.has_key?('DEPLOY_CONF_FILE')
-      File.open(ENV['DEPLOY_CONF_FILE'], "r") do |yaml_file|
-        yaml_conf = YAML.load(ERB.new(File.read(yaml_file)).result)
+      begin
+        File.open(ENV['DEPLOY_CONF_FILE'], "r") do |yaml_file|
+          yaml_conf = YAML.load(ERB.new(File.read(yaml_file)).result)
 
-        if yaml_conf.has_key?('deploy_environments') && yaml_conf['deploy_environments']
-          @envs_requested_to_deploy.concat(yaml_conf['deploy_environments'])
-        end
-        if yaml_conf.has_key?('env_vars') && yaml_conf['env_vars']
-          # puts yaml_conf['env_vars']
-          yaml_conf['env_vars'].each do |env|
-            k, v = env.first
-            ENV[k] = v
+          if yaml_conf.has_key?('deploy_environments') && yaml_conf['deploy_environments']
+            @envs_requested_to_deploy.concat(yaml_conf['deploy_environments'])
+          end
+          if yaml_conf.has_key?('env_vars') && yaml_conf['env_vars']
+            # puts yaml_conf['env_vars']
+            yaml_conf['env_vars'].each do |env|
+              k, v = env.first
+              ENV[k] = v
+            end
+          end
+          if yaml_conf.has_key?('age_keys') && yaml_conf['age_keys']
+            age_keys.concat(yaml_conf['age_keys'])
           end
         end
-        if yaml_conf.has_key?('age_keys') && yaml_conf['age_keys']
-          age_keys.concat(yaml_conf['age_keys'])
-        end
+      rescue
+        puts "\nDEPLOY_CONF_FILE (#{ENV['DEPLOY_CONF_FILE'].green}) doesn't exist, so I'm exit."
+        exit(0)
       end
+
     end
 
     if age_keys
