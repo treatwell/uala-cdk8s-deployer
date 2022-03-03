@@ -223,7 +223,7 @@ class DeployerController
 
       # preparing environment for this cluster and set up project id in codebase
       envs.each do |env|
-        puts "Preparing '#{env['name']}' to cluster '#{cluster}'...".green
+        puts "\nPreparing '#{env['name']}' to cluster '#{cluster}'...".green
         # puts env
         projects = rancher_login(env['settings'])
         project_id = rancher_select_project(env['settings'], projects)
@@ -284,11 +284,13 @@ class DeployerController
         env['all_namespaces'] = all_namespaces
       end
 
-      puts "\nRun cdk8s...".green
+      envs_cdk8s = envs.map { |e| e['name']}.join(',')
+
+      puts "\nRun cdk8s for #{envs_cdk8s}...".green
       cluster_version = rancher_get_cluster_version
       puts "Cluster version: #{cluster_version}".yellow
       result = shell.run!("cd iac-repo/applications/ && \
-      npm run build", env: {K8S_VERSION: cluster_version})
+      npm run build", env: {K8S_VERSION: cluster_version, ENVIRONMENTS: envs_cdk8s})
 
       if result.failed?
         if result.err.include?('trouble decrypting file')
