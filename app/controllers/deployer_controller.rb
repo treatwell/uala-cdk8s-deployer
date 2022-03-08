@@ -220,7 +220,7 @@ class DeployerController
           # puts yaml_content.to_yaml
           # puts project_id
           yaml_content.each do |app, settings|
-            next if yaml_content[app].is_a?(String) || !yaml_content[app].key('projectId')
+            next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
 
             # puts settings['namespace']
 
