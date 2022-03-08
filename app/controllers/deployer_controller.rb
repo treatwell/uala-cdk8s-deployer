@@ -242,8 +242,13 @@ class DeployerController
           yaml_file.truncate(yaml_file.pos)
         end
 
-        puts "\nNamespaces found in environment codebase (filtered):".green
-        puts namespaces
+        if namespaces.size > 0
+          puts "\nNamespaces found in environment codebase (filtered):".green
+          puts namespaces
+        else
+          puts '[ERROR][NAMESPACES] No namespaces found'.red
+          exit 1
+        end
 
         puts "\nCreate any environment namespaces on project #{project_id}...".green
         all_namespaces.each do |namespace|
