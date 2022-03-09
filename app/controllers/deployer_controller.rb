@@ -512,6 +512,6 @@ class DeployerController
 
     server_version = JSON.parse(result.out)['serverVersion']
 
-    "#{server_version['major']}.#{server_version['minor']}"
+    "#{server_version['major']}.#{server_version['minor'].gsub(/[^\d*]/, '')}"
   end
 end
