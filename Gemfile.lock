@@ -1,19 +1,24 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    addressable (2.8.1)
+      public_suffix (>= 2.0.2, < 6.0)
     colorize (0.8.1)
-    deep_merge (1.2.1)
-    dotenv (2.7.6)
-    git (1.9.1)
+    deep_merge (1.2.2)
+    dotenv (2.8.1)
+    git (1.13.2)
+      addressable (~> 2.8)
       rchardet (~> 1.8)
     pastel (0.8.0)
       tty-color (~> 0.5)
+    public_suffix (5.0.1)
     rchardet (1.8.0)
     tty-color (0.6.0)
     tty-command (0.10.1)
       pastel (~> 0.8)
 
 PLATFORMS
+  arm64-darwin-22
   universal-darwin-20
   x86_64-darwin-21
 
@@ -25,4 +30,4 @@ DEPENDENCIES
   tty-command
 
 BUNDLED WITH
-   2.2.26
+   2.4.6
