@@ -115,7 +115,7 @@ class DeployerController
 
     puts "\n#################################################################".green
 
-    #FileUtils.rm_rf('iac-repo')
+    FileUtils.rm_rf('iac-repo')
 
     puts 'OK.'
   end

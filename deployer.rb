@@ -9,7 +9,7 @@ deployer = DeployerController.new
 
 deployer.step_0
 deployer.step_1
-# deployer.step_2
+deployer.step_2
 deployer.step_3
 deployer.step_4
 deployer.step_5
