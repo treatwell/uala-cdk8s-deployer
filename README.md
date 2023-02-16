@@ -36,9 +36,7 @@ deploy_environments:
   - beBrands
   - beGraph
 env_vars:
-  - RANCHER_URL: "https://your.rancherinstance.com"
-  - RANCHER_ACCESS_KEY_ENV: "token-rancher"
-  - RANCHER_SECRET_KEY_ENV: "rancher-secret"
+  - FOO: "BAR"
 age_keys:
   - AGE-SECRET-KEY-123
 ```
@@ -56,18 +54,14 @@ Example `clusters.yaml`:
 clusters:
   - name: aws-test-version
     settings:
-      rancher_url: <%= ENV['RANCHER_URL'] %>
-      rancher_access_key: <%= ENV['RANCHER_ACCESS_KEY_ENV'] %>
-      rancher_secret_key: <%= ENV['RANCHER_SECRET_KEY_ENV'] %>
+      secret: clusters/aws-test-version.enc.yaml
     environments:
       - name: "develop"
         settings:
           rancher_project: "test-iac"
       - name: "production"
         settings:
-          rancher_project: "test-iac"
-          rancher_access_key: <%= ENV['RANCHER_ACCESS_PROD_KEY_ENV'] %>
-          rancher_secret_key: <%= ENV['RANCHER_SECRET_PROD_KEY_ENV'] %>
+          rancher_project: "test-iac-prod"
 ```
 
 In the example above, the tool expects there are 2 environments in these paths:
@@ -76,16 +70,41 @@ applications/environments/develop
 applications/environments/production
 ```
 
-In setting sections the tool expects to find how can access the cluster and how to deploy.
-In the example above, the tool will use Rancher to connect to the cluster and deploy environments to the specific Rancher Project defined.
-
-At this time the tool supports only the deploy with Rancher, plain `kubectl` will be implemented soon.
-
 #### clusters file reference
 
 * `name`: It contains the exactly name of the cluster
 * `environments`: A list of environments the cluster should contain, based on the structure of the Iac Repo
-* `settings`: Useful settings for the tool, like rancher credentials and rancher project. This section can exist at cluster level or at application level, missing informations will be merged with cluster ones.
+* `settings`: Useful settings for the tool, like secret credentials and rancher project. This section can exist at cluster level or at application level, missing informations will be merged with cluster ones.
+
+In setting sections the tool expects to find how can access the cluster and how to deploy.
+In the example above, the tool will use the secret to connect to the cluster and deploy environments to the specific Rancher Project defined.
+
+In the `secret` field you have to specify the path where to find a secret with the auth method.
+The secret should be encrypted with `sops` and should have the following structure:
+```yaml
+name: cluster-name
+data:
+    KUBE_CONFIG: |-
+        apiVersion: v1
+        kind: Config
+        clusters:
+        - name: "your-cluster-kubeconfig"
+        ...
+    IAM_USER:
+        AWS_ACCESS_KEY_ID: YOUR_IAM_ACCESS_KEY
+        AWS_SECRET_ACCESS_KEY: YOUR_IAM_SECRET_KEY
+        AWS_DEFAULT_REGION: eu-west-1
+    RANCHER:
+        SERVER_URL: https://your.rancherinstance.com
+        ACCESS_KEY: token-rancher
+        SECRET_KEY: rancher-secret
+```
+As you can see the tool supports 3 different auth methods in the secret:
+* Plain kubeconfig
+* AWS IAM User with access to eks and to the cluster (a kubeconfig will be generated in realtime)
+* Rancher Credentials
+
+The tool will use only one of the three methods defined in the above order, no fallback is supported atm.
 
 ## Development
 
@@ -101,4 +120,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/uala/c
 ## License
 
 Iac Image Updater is released under the [MIT License](https://opensource.org/licenses/MIT).
-

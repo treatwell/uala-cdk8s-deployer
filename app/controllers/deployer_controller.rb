@@ -15,6 +15,8 @@ class DeployerController
   @clusters_conf = []
   @envs_requested_to_deploy = []
   @envs_to_deploy = []
+  @auth_mode = ""
+  @rancher_prefix = ""
 
   def step_0
     puts "\nStep 0: check required params...".light_yellow
@@ -206,11 +208,34 @@ class DeployerController
     @envs_to_deploy.group_by { |e| e['cluster'] }.each do |cluster, envs|
       # preparing environment for this cluster and set up project id in codebase
       envs.each do |env|
-        puts "\nPreparing '#{env['name']}' to cluster '#{cluster}'...".green
+        puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
         # puts env
-        projects = rancher_login(env['settings'])
-        project_id = rancher_select_project(env['settings'], projects)
-        project_namespaces = rancher_list_ns
+        rancher_settings = env['settings']
+        auth = get_cluster_auth_method(env['settings'])
+        @auth_mode = auth[:auth_mode]
+        projects = []
+        project_id = ""
+        project_namespaces = []
+        if @auth_mode == "RANCHER" && auth[:data]['SERVER_URL']
+          rancher_settings['rancher_url'] = auth[:data]['SERVER_URL']
+          rancher_settings['rancher_access_key'] = auth[:data]['ACCESS_KEY']
+          rancher_settings['rancher_secret_key'] = auth[:data]['SECRET_KEY']
+        end
+
+        if @auth_mode == "KUBECTL"
+          ENV["KUBECONFIG"] = auth[:data]
+          print "Test cluster connection with kubectl... "
+          if get_cluster_version
+            puts 'OK.'.green
+          end
+        end
+
+        if rancher_settings['rancher_url']
+          @rancher_prefix = "rancher "
+          projects = rancher_login(rancher_settings)
+          project_id = rancher_select_project(rancher_settings, projects)
+          project_namespaces = rancher_list_ns
+        end
 
         # search environment namespaces
         all_namespaces = []
@@ -218,11 +243,8 @@ class DeployerController
         File.open("iac-repo/applications/environments/#{env['name']}/applications_settings.yaml", 'r+') do |yaml_file|
           yaml_content = YAML.safe_load(yaml_file.read)
           # puts yaml_content.to_yaml
-          # puts project_id
           yaml_content.each do |app, settings|
             next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
-
-            # puts settings['namespace']
 
             if !env['applications'] || (
                 env['applications'] &&
@@ -232,8 +254,10 @@ class DeployerController
               namespaces.push(settings['namespace'])
             end
             all_namespaces.push(settings['namespace'])
-            # mandatory to add projectId to any namespace of the environment
-            yaml_content[app]['projectId'] = project_id
+            # Add projectId to any namespace of the environment if it's empty
+            if yaml_content[app]['projectId'].to_s.strip.empty? && project_id
+              yaml_content[app]['projectId'] = project_id
+            end
           end
 
           # puts yaml_content.to_yaml
@@ -250,21 +274,23 @@ class DeployerController
           exit 1
         end
 
-        puts "\nCreate any environment namespaces on project #{project_id}...".green
-        all_namespaces.each do |namespace|
-          # if we are using rancher, we have to create namespaces with rancher cli, otherwise
-          # credentials limited to a specific project (no cluster scope roles) cannot create namespaces with yaml
-          print "Check namespace '#{namespace}' existance... "
-          found_namespace = project_namespaces.detect { |proj_namespace| proj_namespace['NAME'] == namespace }
-          if !found_namespace
-            result = shell_to_output.run!("rancher namespaces create #{namespace}")
-            if result.failed?
-              puts "[ERROR][RANCHER-NS] #{result.err}".red
-              exit 1
+        if @auth_mode == "RANCHER"
+          puts "\nCreate environment namespaces on project #{project_id}...".green
+          namespaces.each do |namespace|
+            # if we are using rancher, we have to create namespaces with rancher cli, otherwise
+            # credentials limited to a specific project (no cluster scope roles) cannot create namespaces with yaml
+            print "Check namespace '#{namespace}' existance... "
+            found_namespace = project_namespaces.detect { |proj_namespace| proj_namespace['NAME'] == namespace }
+            if !found_namespace
+              result = shell_to_output.run!("rancher namespaces create #{namespace}")
+              if result.failed?
+                puts "[ERROR][RANCHER-NS] #{result.err}".red
+                exit 1
+              end
+              puts 'Namespace created.'.green
+            else
+              puts 'OK.'.green
             end
-            puts 'Namespace created.'.green
-          else
-            puts 'OK.'.green
           end
         end
 
@@ -275,7 +301,7 @@ class DeployerController
       envs_cdk8s = envs.map { |e| e['name'] }.join(',')
 
       puts "\nRun cdk8s for #{envs_cdk8s}...".green
-      cluster_version = rancher_get_cluster_version
+      cluster_version = get_cluster_version
       puts "Cluster version: #{cluster_version}".yellow
       result = shell.run!(
         'cd iac-repo/applications/ && npm run build',
@@ -328,20 +354,20 @@ class DeployerController
         end
 
         puts "\nApplying namespaces...".green
-        result = shell_to_output.run!("rancher kubectl apply #{dry_run} -f #{namespace_yaml}")
+        result = shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{namespace_yaml}")
 
         if result.failed?
-          puts "[ERROR][RANCHER] #{result.err}".red
+          puts "[ERROR][#{@auth_mode}] #{result.err}".red
           exit 1
         end
 
         # kubectl apply for namespaces of this environment by name (ex. *-namespaces-{environment_name}.k8s.yaml)
         env_compiled_yamls.each do |yaml|
           puts "\nAppling #{yaml}...".green
-          result = shell_to_output.run!("rancher kubectl apply #{dry_run} -f #{yaml}")
+          result = shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{yaml}")
 
           if result.failed?
-            puts "[ERROR][RANCHER] #{result.err}".red
+            puts "[ERROR][#{@auth_mode}] #{result.err}".red
             exit 1
           end
         end
@@ -414,6 +440,52 @@ class DeployerController
     end
 
     table
+  end
+
+  def get_cluster_auth_method(settings)
+    puts "Get cluster auth method..."
+    if (settings.key?('secret') && !settings['secret'].empty?)
+      puts "Found a secret, trying to decode it..."
+      result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")
+      if result.failed?
+        puts "[ERROR][CLUSTER-AUTH] #{result.err}".red
+        exit 1
+      end
+      yaml_content = YAML.safe_load(result.out)
+      if yaml_content["data"]["KUBE_CONFIG"]
+        puts "Found a kubeconfig in the secret, saving it... "
+        FileUtils.mkdir_p("iac-repo/clusters/kubeconfig")
+        path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
+        File.open("#{path}", 'w') do |file|
+          file.write(yaml_content["data"]["KUBE_CONFIG"])
+        end
+        return { auth_mode: "KUBECTL", data: path }
+      end
+      if yaml_content["data"]["IAM_USER"]
+        print "Found a iam_user, trying to get a kubeconfig... "
+        ENV['AWS_ACCESS_KEY_ID'] = yaml_content["data"]["IAM_USER"]["AWS_ACCESS_KEY_ID"]
+        ENV['AWS_SECRET_ACCESS_KEY'] = yaml_content["data"]["IAM_USER"]["AWS_SECRET_ACCESS_KEY"]
+        ENV['AWS_DEFAULT_REGION'] = yaml_content["data"]["IAM_USER"]["AWS_DEFAULT_REGION"]
+        # shell_to_output.run!("aws sts get-caller-identity")
+        path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
+        result = shell.run!("aws eks update-kubeconfig \
+                            --name #{yaml_content['name']} \
+                            --alias #{yaml_content['name']} \
+                            --kubeconfig #{path}")
+        if result.failed?
+          puts "[ERROR][GET-AUTH] #{result.err}".red
+          exit 1
+        end
+        puts 'OK.'.green
+        return { auth_mode: "KUBECTL", data: path }
+      end
+      if yaml_content["data"]["RANCHER"]
+        puts "Found a rancher setup in the secret, we'll using it."
+        return { auth_mode: "RANCHER", data: yaml_content["data"]["RANCHER"] }
+      end
+    end
+    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".light_yellow
+    return { auth_mode: "RANCHER", data: "" }
   end
 
   def rancher_login(settings)
@@ -502,11 +574,11 @@ class DeployerController
     ascii_table_to_array(result.out)
   end
 
-  def rancher_get_cluster_version
-    result = shell.run!('rancher kubectl version --output=json')
+  def get_cluster_version
+    result = shell.run!("#{@rancher_prefix}kubectl version --output=json")
 
     if result.failed?
-      puts "[ERROR][RANCHER] #{result.err}".red
+      puts "[ERROR][#{@auth_mode}] #{result.err}".red
       exit 1
     end
 
