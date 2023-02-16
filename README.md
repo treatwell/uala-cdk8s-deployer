@@ -106,7 +106,7 @@ data:
         ACCESS_KEY: token-rancher
         SECRET_KEY: rancher-secret
 ```
-As you can see the tool supports 3 different auth method in the secret:
+As you can see the tool supports 3 different auth methods in the secret:
 * Plain kubeconfig
 * AWS IAM User with access to eks and to the cluster (a kubeconfig will be generated in realtime)
 * Rancher Credentials
