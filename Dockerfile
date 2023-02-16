@@ -7,8 +7,8 @@ RUN apt-get update -qq && \
     apt-get upgrade -y && \
     apt-get install -y build-essential \
                        apt-transport-https \
-                       git curl wget \
-                       cmake \
+                       git curl wget unzip \
+                       cmake groff \
                        libpq-dev \
                        libssl-dev \
                        libcurl4-openssl-dev && \
@@ -20,6 +20,10 @@ RUN npm -v
 
 # install rancher CLI
 COPY --from=ranchercli /usr/bin/rancher /usr/local/bin
+
+# install aws CLI
+RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip -qq awscliv2.zip && ./aws/install
 
 # install kubectl
 ENV KUBECTL_VERSION=v1.23.0
