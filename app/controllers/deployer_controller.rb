@@ -444,7 +444,7 @@ class DeployerController
 
   def get_cluster_auth_method(settings)
     puts "Get cluster auth method..."
-    if (!settings['secret'].empty?)
+    if (settings.key?('secret') && !settings['secret'].empty?)
       puts "Found a secret, trying to decode it..."
       result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")
       if result.failed?
@@ -484,6 +484,7 @@ class DeployerController
         return { auth_mode: "RANCHER", data: yaml_content["data"]["RANCHER"] }
       end
     end
+    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".light_yellow
     return { auth_mode: "RANCHER", data: "" }
   end
 
