@@ -224,7 +224,7 @@ class DeployerController
 
         if @auth_mode == "KUBECTL"
           ENV["KUBECONFIG"] = auth[:data]
-          print "Test cluster connection with kubectl..."
+          print "Test cluster connection with kubectl... "
           if get_cluster_version
             puts 'OK.'.green
           end
@@ -453,12 +453,30 @@ class DeployerController
       end
       yaml_content = YAML.safe_load(result.out)
       if yaml_content["data"]["KUBE_CONFIG"]
-        puts "Found a kubeconfig in the secret, saving it..."
+        puts "Found a kubeconfig in the secret, saving it... "
         FileUtils.mkdir_p("iac-repo/clusters/kubeconfig")
         path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
         File.open("#{path}", 'w') do |file|
           file.write(yaml_content["data"]["KUBE_CONFIG"])
         end
+        return { auth_mode: "KUBECTL", data: path }
+      end
+      if yaml_content["data"]["IAM_USER"]
+        print "Found a iam_user, trying to get a kubeconfig... "
+        ENV['AWS_ACCESS_KEY_ID'] = yaml_content["data"]["IAM_USER"]["AWS_ACCESS_KEY_ID"]
+        ENV['AWS_SECRET_ACCESS_KEY'] = yaml_content["data"]["IAM_USER"]["AWS_SECRET_ACCESS_KEY"]
+        ENV['AWS_DEFAULT_REGION'] = yaml_content["data"]["IAM_USER"]["AWS_DEFAULT_REGION"]
+        # shell_to_output.run!("aws sts get-caller-identity")
+        path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
+        result = shell.run!("aws eks update-kubeconfig \
+                            --name #{yaml_content['name']} \
+                            --alias #{yaml_content['name']} \
+                            --kubeconfig #{path}")
+        if result.failed?
+          puts "[ERROR][GET-AUTH] #{result.err}".red
+          exit 1
+        end
+        puts 'OK.'.green
         return { auth_mode: "KUBECTL", data: path }
       end
       if yaml_content["data"]["RANCHER"]
