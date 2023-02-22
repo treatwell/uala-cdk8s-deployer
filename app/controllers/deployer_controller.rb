@@ -127,17 +127,20 @@ class DeployerController
       'iac-repo',
       { branch: ENV['GIT_IAC_BRANCH'] }
     )
+    puts "Step 2.1: Repo IaC cloned."
 
     result = shell.run!('cd iac-repo && chmod +x scripts/install_dependencies.sh && ./scripts/install_dependencies.sh')
     if result.failed?
       puts "[ERROR][DEPENDENCIES] #{result.err}".red
       exit 1
     end
+    puts "Step 2.2: Helm dependencies installed."
     result = shell.run!('cd iac-repo/applications/ && npm install')
     if result.failed?
       puts "[ERROR][CDK8S-INSTALL] #{result.err}".red
       exit 1
     end
+    puts "Step 2.3: NPM packages installed."
 
     puts 'OK.'
   end
