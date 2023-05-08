@@ -315,7 +315,7 @@ class DeployerController
         if result.err.include?('trouble decrypting file')
           puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.light_red
         end
-        puts "[ERROR][CDK8S] #{result.err}".red
+        puts "[ERROR][CDK8S] #{result}".red
         exit 1
       end
 
