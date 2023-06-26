@@ -119,4 +119,4 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/uala/c
 
 ## License
 
-Iac Image Updater is released under the [MIT License](https://opensource.org/licenses/MIT).
+CDK8S-Deployer is released under the [MIT License](https://opensource.org/licenses/MIT).
