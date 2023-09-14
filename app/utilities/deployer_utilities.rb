@@ -1,7 +1,6 @@
 module Utilities
   extend self
 
-
   def shell
     @_cmd ||= TTY::Command.new(printer: :null)
   end
