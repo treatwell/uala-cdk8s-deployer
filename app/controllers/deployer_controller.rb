@@ -78,7 +78,7 @@ class DeployerController
     if ENV.key?('DEPLOY_CONF_FILE')
       begin
         File.open(ENV['DEPLOY_CONF_FILE'], 'r') do |yaml_file|
-          yaml_conf = YAML.safe_load(ERB.new(File.read(yaml_file)).result)
+          yaml_conf = YAML.safe_load(yaml_file)
 
           @envs_requested_to_deploy.concat(yaml_conf['deploy_environments']) if yaml_conf['deploy_environments']
 
@@ -132,6 +132,7 @@ class DeployerController
       return
     end
 
+    # remove iac-repo folder if exists
     FileUtils.rm_rf('iac-repo')
 
     Git.clone(
@@ -166,7 +167,7 @@ class DeployerController
 
     Dir.glob('iac-repo/clusters*.yaml').each do |file|
       File.open(file, 'r') do |yaml_file|
-        yaml_conf = YAML.safe_load(ERB.new(File.read(yaml_file)).result)
+        yaml_conf = YAML.safe_load(yaml_file)
         @clusters_conf.deep_merge!(yaml_conf)
       end
     end
@@ -182,14 +183,13 @@ class DeployerController
   def find_environments_to_deploy
     _announce_step "Find clusters that contain environments we want to deploy..."
 
-    @envs_to_deploy = []
-
     @clusters_conf['clusters'].each do |cluster|
       # puts "cluster: #{cluster['name']}"
       # puts cluster['environments']
       cluster['environments'].each do |cl_app|
         # puts cl_app
         @envs_requested_to_deploy.each do |env|
+
           environment_name = env.keys[0]
           next unless environment_name == cl_app['name']
 
@@ -290,7 +290,7 @@ class DeployerController
       all_namespaces = []
       namespaces = []
       File.open("iac-repo/applications/environments/#{env['name']}/applications_settings.yaml", 'r+') do |yaml_file|
-        yaml_content = YAML.safe_load(yaml_file.read)
+        yaml_content = YAML.safe_load(yaml_file)
         # puts yaml_content.to_yaml
         yaml_content.each do |app, settings|
           next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
