@@ -9,29 +9,41 @@ require 'colorize'
 require 'logger'
 require 'tty-command'
 require 'json'
+require_relative '../utilities/deployer_utilities'
 
 class DeployerController
-  @git_client = nil
-  @clusters_conf = []
-  @envs_requested_to_deploy = []
-  @envs_to_deploy = []
-  @auth_mode = ""
-  @rancher_prefix = ""
+  def initialize
+    @current_step = 0
+    @clusters_conf = {}
+    @envs_requested_to_deploy = []
+    @envs_to_deploy = []
+    @auth_mode = ""
+    @rancher_prefix = ""
+  end
 
-  def step_0
-    puts "\nStep 0: check required params...".light_yellow
-    if !ENV.key?('GIT_IAC_REPO')
+  def run
+    check_required_params
+    prepare_local_environment
+    clone_iac_repo
+    get_clusters_available
+    find_environments_to_deploy
+    deploy_environments
+  end
+
+  def check_required_params
+    _announce_step "check required params..."
+    unless ENV.key?('GIT_IAC_REPO')
       puts '[ERROR] GIT_IAC_REPO environment variable is missing!'.red
       exit 1
     end
 
-    if !ENV.key?('GIT_IAC_TOKEN')
+    unless ENV.key?('GIT_IAC_TOKEN')
       puts '[ERROR] GIT_IAC_TOKEN environment variable is missing!'.red
       exit 1
     end
 
     # applications list based on a YAML file or with a specific ENV
-    if !ENV.key?('DEPLOY_ENVIRONMENTS') && !ENV.key?('DEPLOY_CONF_FILE')
+    unless ENV.key?('DEPLOY_ENVIRONMENTS') || ENV.key?('DEPLOY_CONF_FILE')
       puts '[ERROR] DEPLOY_ENVIRONMENTS or DEPLOY_CONF_FILE environment variable must be set!'.red
       exit 1
     end
@@ -39,9 +51,8 @@ class DeployerController
     puts 'OK.'
   end
 
-  def step_1
-    puts "\nStep 1: Prepare local environment...".light_yellow
-
+  def prepare_local_environment
+    _announce_step "Prepare local environment..."
     ENV['GITHUB_TOKEN'] = ENV['GIT_IAC_TOKEN']
 
     puts "\n#################################################################".green
@@ -114,40 +125,42 @@ class DeployerController
     end
 
     puts "\n#################################################################".green
-
-    FileUtils.rm_rf('iac-repo')
-
     puts 'OK.'
   end
 
-  def step_2
-    puts "\nStep 2: Clone iac-repo...".light_yellow
-    @git_client = Git.clone(
+  def clone_iac_repo
+    _announce_step "Clone iac-repo..."
+    if ENV['DEBUG_SKIP_CLONE_REPO_STEP'] == 'true'
+      puts "[DEBUG] Step skipped.".green
+      return
+    end
+
+    FileUtils.rm_rf('iac-repo')
+    Git.clone(
       "https://#{ENV['GIT_IAC_TOKEN']}@#{ENV['GIT_IAC_REPO']}",
       'iac-repo',
       { branch: ENV['GIT_IAC_BRANCH'] }
     )
-    puts "Step 2.1: Repo IaC cloned."
+    _announce_substep "Repo IaC cloned."
 
-    result = shell.run!('cd iac-repo && chmod +x scripts/install_dependencies.sh && ./scripts/install_dependencies.sh')
+    result = Utilities.shell.run!('cd iac-repo && chmod +x scripts/install_dependencies.sh && ./scripts/install_dependencies.sh')
     if result.failed?
       puts "[ERROR][DEPENDENCIES] #{result.err}".red
       exit 1
     end
-    puts "Step 2.2: Helm dependencies installed."
-    result = shell.run!('cd iac-repo/applications/ && npm install')
+    _announce_substep "Helm dependencies installed."
+    result = Utilities.shell.run!('cd iac-repo/applications/ && npm install')
     if result.failed?
       puts "[ERROR][CDK8S-INSTALL] #{result.err}".red
       exit 1
     end
-    puts "Step 2.3: NPM packages installed."
+    _announce_substep "NPM packages installed."
 
     puts 'OK.'
   end
 
-  def step_3
-    puts "\nStep 3: Get clusters available in iac-repo...".light_yellow
-
+  def get_clusters_available
+    _announce_step "Get clusters available in iac-repo..."
     @clusters_conf = {}
 
     Dir.glob('iac-repo/clusters*.yaml').each do |file|
@@ -157,7 +170,7 @@ class DeployerController
       end
     end
 
-    if !@clusters_conf['clusters']
+    unless @clusters_conf['clusters']
       puts '[ERROR] No clusters configured in iac-repo/clusters*.yaml files.'.red
       exit 1
     end
@@ -165,9 +178,8 @@ class DeployerController
     puts 'OK.'
   end
 
-  def step_4
-    puts "\nStep 4: Find clusters that contain environments we want to deploy...".light_yellow
-
+  def find_environments_to_deploy
+    _announce_step "Find clusters that contain environments we want to deploy..."
     @envs_to_deploy = []
 
     @clusters_conf['clusters'].each do |cluster|
@@ -204,389 +216,210 @@ class DeployerController
     # puts @envs_to_deploy
   end
 
-  def step_5
-    puts "\nStep 5: Deploy environments...".light_yellow
-
+  def deploy_environments
+    _announce_step "Deploy environments..."
     # each for clusters
     @envs_to_deploy.group_by { |e| e['cluster'] }.each do |cluster, envs|
-      # preparing environment for this cluster and set up project id in codebase
-      envs.each do |env|
-        puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
-        # puts env
-        rancher_settings = env['settings']
-        auth = get_cluster_auth_method(env['settings'])
-        @auth_mode = auth[:auth_mode]
-        projects = []
-        project_id = ""
-        project_namespaces = []
-        if @auth_mode == "RANCHER" && auth[:data]['SERVER_URL']
-          rancher_settings['rancher_url'] = auth[:data]['SERVER_URL']
-          rancher_settings['rancher_access_key'] = auth[:data]['ACCESS_KEY']
-          rancher_settings['rancher_secret_key'] = auth[:data]['SECRET_KEY']
-        end
+      @auth_mode = ""
+      @rancher_prefix = ""
 
-        if @auth_mode == "KUBECTL"
-          ENV["KUBECONFIG"] = auth[:data]
-          print "Test cluster connection with kubectl... "
-          if get_cluster_version
-            puts 'OK.'.green
-          end
-        end
+      # preparing environments for this cluster and set up project id in codebase
+      _prepare_cluster_environments(cluster, envs)
 
-        if rancher_settings['rancher_url']
-          @rancher_prefix = "rancher "
-          projects = rancher_login(rancher_settings)
-          project_id = rancher_select_project(rancher_settings, projects)
-          project_namespaces = rancher_list_ns
-        end
+      # run cdk8s for current cluster environments
+      _build_cluster_environments(cluster, envs)
 
-        # search environment namespaces
-        all_namespaces = []
-        namespaces = []
-        File.open("iac-repo/applications/environments/#{env['name']}/applications_settings.yaml", 'r+') do |yaml_file|
-          yaml_content = YAML.safe_load(yaml_file.read)
-          # puts yaml_content.to_yaml
-          yaml_content.each do |app, settings|
-            next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
+      # deploy environments on the current cluster
+      _deploy_cluster_environments(cluster, envs)
+    end
+  end
 
-            if !env['applications'] || (
-                env['applications'] &&
-                env['applications'].size > 0 &&
-                env['applications'].include?(app)
-              )
-              namespaces.push(settings['namespace'])
-            end
-            all_namespaces.push(settings['namespace'])
-            # Add projectId to any namespace of the environment if it's empty
-            if yaml_content[app]['projectId'].to_s.strip.empty? && project_id
-              yaml_content[app]['projectId'] = project_id
-            end
-          end
+  private
 
-          # puts yaml_content.to_yaml
-          yaml_file.rewind
-          yaml_file.write(yaml_content.to_yaml)
-          yaml_file.truncate(yaml_file.pos)
-        end
+  def _announce_step(text)
+    @current_step+=1
+    @current_substep = 0
+    puts "\nStep #{@current_step}: #{text}".light_yellow
+  end
 
-        if namespaces.size > 0
-          puts "\nNamespaces found in environment codebase (filtered):".green
-          puts namespaces
-        else
-          puts '[ERROR][NAMESPACES] No namespaces found'.red
-          exit 1
-        end
+  def _announce_substep(text)
+    @current_substep+=1
+    puts "Step #{@current_step}.#{@current_substep}: #{text}"
+  end
 
-        if @auth_mode == "RANCHER"
-          puts "\nCreate environment namespaces on project #{project_id}...".green
-          namespaces.each do |namespace|
-            # if we are using rancher, we have to create namespaces with rancher cli, otherwise
-            # credentials limited to a specific project (no cluster scope roles) cannot create namespaces with yaml
-            print "Check namespace '#{namespace}' existance... "
-            found_namespace = project_namespaces.detect { |proj_namespace| proj_namespace['NAME'] == namespace }
-            if !found_namespace
-              result = shell_to_output.run!("rancher namespaces create #{namespace}")
-              if result.failed?
-                puts "[ERROR][RANCHER-NS] #{result.err}".red
-                exit 1
-              end
-              puts 'Namespace created.'.green
-            else
-              puts 'OK.'.green
-            end
-          end
-        end
-
-        env['namespaces'] = namespaces
-        env['all_namespaces'] = all_namespaces
+  def _prepare_cluster_environments(cluster, envs)
+    envs.each do |env|
+      puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
+      # puts env
+      rancher_settings = env['settings']
+      auth = Utilities.get_cluster_auth_method(env['settings'])
+      @auth_mode = auth[:auth_mode]
+      projects = []
+      project_id = ""
+      project_namespaces = []
+      if @auth_mode == "RANCHER" && auth[:data]['SERVER_URL']
+        rancher_settings['rancher_url'] = auth[:data]['SERVER_URL']
+        rancher_settings['rancher_access_key'] = auth[:data]['ACCESS_KEY']
+        rancher_settings['rancher_secret_key'] = auth[:data]['SECRET_KEY']
       end
 
-      envs_cdk8s = envs.map { |e| e['name'] }.join(',')
-
-      puts "\nRun cdk8s for #{envs_cdk8s}...".green
-      cluster_version = get_cluster_version
-      puts "Cluster version: #{cluster_version}".yellow
-      result = shell.run!(
-        'cd iac-repo/applications/ && npm run build',
-        env: { K8S_VERSION: cluster_version, ENVIRONMENTS: envs_cdk8s }
-      )
-
-      if result.failed?
-        if result.err.include?('trouble decrypting file')
-          puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.light_red
+      if @auth_mode == "KUBECTL"
+        ENV["KUBECONFIG"] = auth[:data]
+        print "Test cluster connection with kubectl... "
+        if Utilities.get_cluster_version("", @auth_mode)
+          puts 'OK.'.green
         end
-        puts "[ERROR][CDK8S] #{result}".red
+      end
+
+      if rancher_settings['rancher_url']
+        @rancher_prefix = "rancher "
+        projects = Utilities.rancher_login(rancher_settings)
+        project_id = Utilities.rancher_select_project(rancher_settings, projects)
+        project_namespaces = Utilities.rancher_list_ns
+      else
+        @rancher_prefix = ""
+      end
+
+      # search environment namespaces
+      all_namespaces = []
+      namespaces = []
+      File.open("iac-repo/applications/environments/#{env['name']}/applications_settings.yaml", 'r+') do |yaml_file|
+        yaml_content = YAML.safe_load(yaml_file.read)
+        # puts yaml_content.to_yaml
+        yaml_content.each do |app, settings|
+          next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
+
+          if !env['applications'] || (
+              env['applications'] &&
+              env['applications'].size > 0 &&
+              env['applications'].include?(app)
+            )
+            namespaces.push(settings['namespace'])
+          end
+          all_namespaces.push(settings['namespace'])
+          # Add projectId to any namespace of the environment if it's empty
+          if yaml_content[app]['projectId'].to_s.strip.empty? && project_id
+            yaml_content[app]['projectId'] = project_id
+          end
+        end
+
+        # puts yaml_content.to_yaml
+        yaml_file.rewind
+        yaml_file.write(yaml_content.to_yaml)
+        yaml_file.truncate(yaml_file.pos)
+      end
+
+      if namespaces.size > 0
+        puts "\nNamespaces found in environment codebase (filtered):".green
+        puts namespaces
+      else
+        puts '[ERROR][NAMESPACES] No namespaces found'.red
         exit 1
       end
 
-      puts 'OK.'
-
-      yaml_files = []
-      Dir.glob('iac-repo/applications/dist/*.k8s.yaml').each do |file|
-        yaml_files.push(file)
-      end
-
-      envs.each do |env|
-        puts "\nDeploying '#{env['name']}' to cluster '#{cluster}'...".green
-
-        namespace_yaml = "iac-repo/applications/dist/*-namespaces-#{env['name']}.k8s.yaml"
-        env_compiled_yamls = yaml_files.select { |f| env['namespaces'].any? { |n| f.include?(n) } }.sort
-
-        if (empty_yamls = env_compiled_yamls.reject { |f| YAML.load_file(f) }).any?
-          puts "\nSkipping these files as they are empty:".yellow
-          puts empty_yamls
-          env_compiled_yamls -= empty_yamls
-        end
-
-        puts "\nThese files will be deployed:".yellow
-        puts namespace_yaml
-        puts env_compiled_yamls
-
-        dry_run = ''
-        ENV['DEPLOY_DRY_RUN'] = 'client' if ENV['DEPLOY_DRY_RUN'] == 'true'
-        if %w[client server].include?(ENV['DEPLOY_DRY_RUN'])
-          puts "\n[Commands will be executed in #{ENV['DEPLOY_DRY_RUN']} dry run mode]".yellow
-          dry_run = "--dry-run='#{ENV['DEPLOY_DRY_RUN']}'"
-        elsif ENV['DEPLOY_ASK_CONFIRM'] == 'true'
-          puts "\nDo you really want to deploy? (Y/N)".light_yellow
-          answer = gets.chomp
-          if answer.upcase != 'Y'
-            puts 'Deploy stopped.'.red
-            exit 1
+      if @auth_mode == "RANCHER"
+        puts "\nCreate environment namespaces on project #{project_id}...".green
+        namespaces.each do |namespace|
+          # if we are using rancher, we have to create namespaces with rancher cli, otherwise
+          # credentials limited to a specific project (no cluster scope roles) cannot create namespaces with yaml
+          print "Check namespace '#{namespace}' existance... "
+          found_namespace = project_namespaces.detect { |proj_namespace| proj_namespace['NAME'] == namespace }
+          unless found_namespace
+            result = Utilities.shell_to_output.run!("rancher namespaces create #{namespace}")
+            if result.failed?
+              puts "[ERROR][RANCHER-NS] #{result.err}".red
+              exit 1
+            end
+            puts 'Namespace created.'.green
+          else
+            puts 'OK.'.green
           end
         end
+      end
 
-        puts "\nApplying namespaces...".green
-        result = shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{namespace_yaml}")
+      env['namespaces'] = namespaces
+      env['all_namespaces'] = all_namespaces
+    end
+  end
+
+  def _build_cluster_environments(cluster, envs)
+    envs_cdk8s = envs.map { |e| e['name'] }.join(',')
+
+    puts "\nRun cdk8s for '#{envs_cdk8s}' on cluster '#{cluster}'...".green
+    cluster_version = Utilities.get_cluster_version(@rancher_prefix, @auth_mode)
+    puts "Cluster version: #{cluster_version}".yellow
+    result = Utilities.shell.run!(
+      'cd iac-repo/applications/ && npm run build',
+      env: { K8S_VERSION: cluster_version, ENVIRONMENTS: envs_cdk8s }
+    )
+
+    if result.failed?
+      if result.err.include?('trouble decrypting file')
+        puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.light_red
+      end
+      puts "[ERROR][CDK8S] #{result}".red
+      exit 1
+    end
+
+    puts 'OK.'
+  end
+
+  def _deploy_cluster_environments(cluster, envs)
+    yaml_files = []
+    Dir.glob('iac-repo/applications/dist/*.k8s.yaml').each do |file|
+      yaml_files.push(file)
+    end
+
+    envs.each do |env|
+      puts "\nDeploying '#{env['name']}' to cluster '#{cluster}'...".green
+
+      namespace_yaml = "iac-repo/applications/dist/*-namespaces-#{env['name']}.k8s.yaml"
+      env_compiled_yamls = yaml_files.select { |f| env['namespaces'].any? { |n| f.include?(n) } }.sort
+
+      if (empty_yamls = env_compiled_yamls.reject { |f| YAML.load_file(f) }).any?
+        puts "\nSkipping these files as they are empty:".yellow
+        puts empty_yamls
+        env_compiled_yamls -= empty_yamls
+      end
+
+      puts "\nThese files will be deployed:".yellow
+      puts namespace_yaml
+      puts env_compiled_yamls
+
+      dry_run = ''
+      ENV['DEPLOY_DRY_RUN'] = 'client' if ENV['DEPLOY_DRY_RUN'] == 'true'
+      if %w[client server].include?(ENV['DEPLOY_DRY_RUN'])
+        puts "\n[Commands will be executed in #{ENV['DEPLOY_DRY_RUN']} dry run mode]".yellow
+        dry_run = "--dry-run='#{ENV['DEPLOY_DRY_RUN']}'"
+      elsif ENV['DEPLOY_ASK_CONFIRM'] == 'true'
+        puts "\nDo you really want to deploy? (Y/N)".light_yellow
+        answer = gets.chomp
+        if answer.upcase != 'Y'
+          puts 'Deploy stopped.'.red
+          exit 1
+        end
+      end
+
+      puts "\nApplying namespaces...".green
+      result = Utilities.shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{namespace_yaml}")
+
+      if result.failed?
+        puts "[ERROR][#{@auth_mode}] #{result.err}".red
+        exit 1
+      end
+
+      # kubectl apply for namespaces of this environment by name (ex. *-namespaces-{environment_name}.k8s.yaml)
+      env_compiled_yamls.each do |yaml|
+        puts "\nAppling #{yaml}...".green
+        result = Utilities.shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{yaml}")
 
         if result.failed?
           puts "[ERROR][#{@auth_mode}] #{result.err}".red
           exit 1
         end
-
-        # kubectl apply for namespaces of this environment by name (ex. *-namespaces-{environment_name}.k8s.yaml)
-        env_compiled_yamls.each do |yaml|
-          puts "\nAppling #{yaml}...".green
-          result = shell_to_output.run!("#{@rancher_prefix}kubectl apply #{dry_run} -f #{yaml}")
-
-          if result.failed?
-            puts "[ERROR][#{@auth_mode}] #{result.err}".red
-            exit 1
-          end
-        end
-        # puts result.out
-        puts 'OK.'
       end
+      # puts result.out
+      puts 'OK.'
     end
-  end
-
-  def shell
-    @_cmd ||= TTY::Command.new(printer: :null)
-  end
-
-  def shell_to_output
-    @_cmd_output ||= TTY::Command.new(printer: :quiet)
-  end
-
-  def analyze_ascii_table(header)
-    spaces_count = 0
-    char_count = 0
-    columns_length = []
-    header.each_char.with_index do |c, i|
-      if c == ' '
-        spaces_count += 1
-      elsif spaces_count >= 2
-        columns_length.push(char_count)
-        char_count = 0
-        spaces_count = 0
-      end
-      char_count += 1
-    end
-
-    columns_length
-  end
-
-  def get_line_ascii_table(columns_length, line, header)
-    row = header ? {} : []
-    columns_length.each_with_index do |i, index|
-      column, part2 = line.slice!(0...i), line
-      if header
-        row[header[index]] = column.strip!
-      else
-        row.push(column.strip!)
-      end
-    end
-
-    if header
-      row[header[header.length-1]] = line.strip!
-    else
-      row.push(line.strip!)
-    end
-
-    row
-  end
-
-  def ascii_table_to_array(ascii_table)
-    table = []
-    header = ascii_table.lines[0]
-    ascii_table_struct = analyze_ascii_table(header)
-    # puts header
-    header_line = get_line_ascii_table(ascii_table_struct, header, nil)
-
-    ascii_table.each_line.with_index do |line, index|
-      next if index == 0
-
-      converted_line = get_line_ascii_table(ascii_table_struct, line, header_line)
-      if converted_line['NUMBER'] || converted_line['ID']
-        table.push(converted_line)
-      end
-    end
-
-    table
-  end
-
-  def get_cluster_auth_method(settings)
-    puts "Get cluster auth method..."
-    if (settings.key?('secret') && !settings['secret'].empty?)
-      puts "Found a secret, trying to decode it..."
-      result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")
-      if result.failed?
-        puts "[ERROR][CLUSTER-AUTH] #{result.err}".red
-        exit 1
-      end
-      yaml_content = YAML.safe_load(result.out)
-      if yaml_content["data"]["KUBE_CONFIG"]
-        puts "Found a kubeconfig in the secret, saving it... "
-        FileUtils.mkdir_p("iac-repo/clusters/kubeconfig")
-        path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
-        File.open("#{path}", 'w') do |file|
-          file.write(yaml_content["data"]["KUBE_CONFIG"])
-        end
-        return { auth_mode: "KUBECTL", data: path }
-      end
-      if yaml_content["data"]["IAM_USER"]
-        print "Found a iam_user, trying to get a kubeconfig... "
-        ENV['AWS_ACCESS_KEY_ID'] = yaml_content["data"]["IAM_USER"]["AWS_ACCESS_KEY_ID"]
-        ENV['AWS_SECRET_ACCESS_KEY'] = yaml_content["data"]["IAM_USER"]["AWS_SECRET_ACCESS_KEY"]
-        ENV['AWS_DEFAULT_REGION'] = yaml_content["data"]["IAM_USER"]["AWS_DEFAULT_REGION"]
-        # shell_to_output.run!("aws sts get-caller-identity")
-        path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
-        result = shell.run!("aws eks update-kubeconfig \
-                            --name #{yaml_content['name']} \
-                            --alias #{yaml_content['name']} \
-                            --kubeconfig #{path}")
-        if result.failed?
-          puts "[ERROR][GET-AUTH] #{result.err}".red
-          exit 1
-        end
-        puts 'OK.'.green
-        return { auth_mode: "KUBECTL", data: path }
-      end
-      if yaml_content["data"]["RANCHER"]
-        puts "Found a rancher setup in the secret, we'll using it."
-        return { auth_mode: "RANCHER", data: yaml_content["data"]["RANCHER"] }
-      end
-    end
-    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".light_yellow
-    return { auth_mode: "RANCHER", data: "" }
-  end
-
-  def rancher_login(settings)
-    result = shell.run!("echo '1' | rancher login #{settings['rancher_url']} -t #{settings['rancher_access_key']}:#{settings['rancher_secret_key']}")
-
-    if result.failed?
-      puts "[ERROR][RANCHER-LOGIN] #{result.err}".red
-      exit 1
-    end
-
-    if result.out.include?('CLUSTER NAME')
-      puts "LOGGED IN TO #{settings['rancher_url']}."
-
-      projects = ascii_table_to_array(result.out)
-    end
-
-    projects
-  end
-
-  def rancher_select_project(settings, projects)
-    puts "Try to select Project '#{settings['rancher_project']}' on cluster '#{settings['cluster_name']}'...".green
-
-    found_project = projects.detect do |project|
-      project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-    end
-
-    if !found_project
-      puts "[WARN] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name'] }'. Trying to create it...".yellow
-      default_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == 'Default'
-      end
-      if !default_project
-        puts "[ERROR] Project \"Default\" doesn't exist on cluster '#{settings['cluster_name']}' or cluster '#{settings['cluster_name']}' doesn't exist.".red
-        exit 1
-      end
-
-      result = shell.run!("rancher context switch #{default_project['PROJECT ID']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-
-      result = shell.run!("rancher projects create --cluster #{settings['cluster_name']} #{settings['rancher_project']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-PROJECT] #{result.err}".red
-        exit 1
-      end
-
-      puts "Project '#{settings['rancher_project']}' created on cluster '#{settings['cluster_name']}'.".green
-
-      # refresh projects and found_project
-      result = shell.run!("echo '\n' | rancher context switch")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-      projects = ascii_table_to_array(result.out)
-      found_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-      end
-      if !found_project
-        puts "[ERR] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name']}' also after create it.".red
-        exit 1
-      end
-    end
-
-    result = shell.run!("rancher context switch #{found_project['PROJECT ID']}")
-    if result.failed?
-      puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-      exit 1
-    end
-
-    puts 'PROJECT SELECTED.'
-
-    found_project['PROJECT ID']
-  end
-
-  def rancher_list_ns
-    result = shell.run!('rancher namespaces')
-
-    if result.failed?
-      puts "[ERROR][RANCHER-NS] #{result.err}".red
-      exit 1
-    end
-
-    ascii_table_to_array(result.out)
-  end
-
-  def get_cluster_version
-    result = shell.run!("#{@rancher_prefix}kubectl version --output=json")
-
-    if result.failed?
-      puts "[ERROR][#{@auth_mode}] #{result.err}".red
-      exit 1
-    end
-
-    server_version = JSON.parse(result.out)['serverVersion']
-
-    "#{server_version['major']}.#{server_version['minor'].gsub(/[^\d*]/, '')}"
   end
 end
