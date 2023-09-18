@@ -67,7 +67,7 @@ module Utilities
   end
 
   def get_cluster_auth_method(settings)
-    puts "Get cluster auth method..."
+    puts "Get cluster '#{settings['cluster_name']}' auth method..."
     if (settings.key?('secret') && !settings['secret'].empty?)
       puts "Found a secret, trying to decode it..."
       result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")

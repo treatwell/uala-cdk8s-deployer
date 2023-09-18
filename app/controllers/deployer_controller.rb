@@ -9,6 +9,7 @@ require 'colorize'
 require 'logger'
 require 'tty-command'
 require 'json'
+require_relative '../utilities/hash'
 require_relative '../utilities/deployer_utilities'
 
 class DeployerController
@@ -191,22 +192,23 @@ class DeployerController
 
           environment_name = env.keys[0]
           next unless environment_name == cl_app['name']
+          unless settings = @envs_to_deploy.find{ |x| x['settings']['cluster_name'] == cluster['name'] }&.dig('settings')&.deep_dup
+            settings = cluster['settings'].merge(cl_app['settings'])
+            settings['cluster_name'] = cluster['name']
 
-          settings = cluster['settings'].merge(cl_app['settings'])
-          settings['cluster_name'] = cluster['name']
+            auth_method = Utilities.get_cluster_auth_method(settings)
 
-          auth_method = Utilities.get_cluster_auth_method(settings)
+            settings['auth_mode'] = auth_method[:auth_mode]
+            settings['auth_data'] = auth_method[:data]
 
-          settings['auth_mode'] = auth_method[:auth_mode]
-          settings['auth_data'] = auth_method[:data]
-
-          if settings['auth_mode'] == "RANCHER" && settings['auth_data']['SERVER_URL']
-            settings['rancher_prefix'] = "rancher "
-            settings['rancher_url'] = settings['auth_data']['SERVER_URL']
-            settings['rancher_access_key'] = settings['auth_data']['ACCESS_KEY']
-            settings['rancher_secret_key'] = settings['auth_data']['SECRET_KEY']
+            if settings['auth_mode'] == "RANCHER" && settings['auth_data']['SERVER_URL']
+              settings['rancher_prefix'] = "rancher "
+              settings['rancher_url'] = settings['auth_data']['SERVER_URL']
+              settings['rancher_access_key'] = settings['auth_data']['ACCESS_KEY']
+              settings['rancher_secret_key'] = settings['auth_data']['SECRET_KEY']
+            end
           end
-
+          settings['rancher_project'] = cl_app['settings']['rancher_project']
           # add env only if not already exists
           @envs_to_deploy |= [{
             'name'         => cl_app['name'],
