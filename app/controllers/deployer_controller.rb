@@ -252,7 +252,7 @@ class DeployerController
   def _announce_step(text)
     @current_step+=1
     @current_substep = 0
-    puts "\nStep #{@current_step}: #{text}".light_yellow
+    puts "\nStep #{@current_step}: #{text}".yellow
   end
 
   def _announce_substep(text)
@@ -362,7 +362,7 @@ class DeployerController
 
     if result.failed?
       if result.err.include?('trouble decrypting file')
-        puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.light_red
+        puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.red
       end
       puts "[ERROR][CDK8S] #{result}".red
       exit 1
@@ -401,7 +401,7 @@ class DeployerController
         puts "\n[Commands will be executed in #{ENV['DEPLOY_DRY_RUN']} dry run mode]".yellow
         dry_run = "--dry-run='#{ENV['DEPLOY_DRY_RUN']}'"
       elsif ENV['DEPLOY_ASK_CONFIRM'] == 'true'
-        puts "\nDo you really want to deploy? (Y/N)".light_yellow
+        puts "\nDo you really want to deploy? (Y/N)".yellow
         answer = gets.chomp
         if answer.upcase != 'Y'
           puts 'Deploy stopped.'.red
