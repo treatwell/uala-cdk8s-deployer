@@ -24,3 +24,4 @@ draw-with-git/
 conf.yaml
 age_keys.txt
 .DS_Store
+.byebug_history

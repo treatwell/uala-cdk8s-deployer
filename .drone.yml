@@ -136,6 +136,6 @@ get:
   name: dockerconfigjson
 ---
 kind: signature
-hmac: a99348bb2060b9cbe2fcaaaeee8df0812a20ec9c4bb09f81b1f96119433c14e1
+hmac: 1124d1f9c29438b718e1bb673df6c54e70ee258556b3206083b79faa4ea8ff84
 
 ...
