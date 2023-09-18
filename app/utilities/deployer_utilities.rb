@@ -108,7 +108,7 @@ module Utilities
         return { auth_mode: "RANCHER", data: yaml_content["data"]["RANCHER"] }
       end
     end
-    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".light_yellow
+    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".yellow
     return { auth_mode: "RANCHER", data: "" }
   end
 
