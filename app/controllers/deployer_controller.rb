@@ -1,4 +1,3 @@
-require 'byebug'
 require 'bundler/setup'
 require 'fileutils'
 require 'date'
