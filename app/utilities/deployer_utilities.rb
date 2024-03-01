@@ -87,12 +87,13 @@ module Utilities
       end
       if yaml_content["data"]["IAM_USER"]
         print "Found a iam_user, trying to get a kubeconfig... "
-        ENV['AWS_ACCESS_KEY_ID'] = yaml_content["data"]["IAM_USER"]["AWS_ACCESS_KEY_ID"]
-        ENV['AWS_SECRET_ACCESS_KEY'] = yaml_content["data"]["IAM_USER"]["AWS_SECRET_ACCESS_KEY"]
-        ENV['AWS_DEFAULT_REGION'] = yaml_content["data"]["IAM_USER"]["AWS_DEFAULT_REGION"]
-        # shell_to_output.run!("aws sts get-caller-identity")
+        shell.run!("aws configure --profile #{yaml_content["name"]} set aws_access_key_id #{yaml_content["data"]["IAM_USER"]["AWS_ACCESS_KEY_ID"]}")
+        shell.run!("aws configure --profile #{yaml_content["name"]} set aws_secret_access_key #{yaml_content["data"]["IAM_USER"]["AWS_SECRET_ACCESS_KEY"]}")
+        shell.run!("aws configure --profile #{yaml_content["name"]} set region #{yaml_content["data"]["IAM_USER"]["AWS_DEFAULT_REGION"]}")
         path = "iac-repo/clusters/kubeconfig/#{yaml_content["name"]}.yaml"
-        result = shell.run!("aws eks update-kubeconfig \
+        # By passing the PROFILE, we don't need to pass it elsewhere as we pass the kubecontext which
+        # has the correct profile.
+        result = shell.run!("AWS_PROFILE=#{yaml_content["name"]} aws eks update-kubeconfig \
                             --name #{yaml_content['name']} \
                             --alias #{yaml_content['name']} \
                             --kubeconfig #{path}")
