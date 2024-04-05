@@ -370,7 +370,7 @@ class DeployerController
       puts "command output (stdout):"
       puts result.out.red
       puts "command error (stderr):"
-      puts result.out.red
+      puts result.err.red
       exit 1
     end
 
