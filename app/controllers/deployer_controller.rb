@@ -367,6 +367,7 @@ class DeployerController
         puts '[ERROR][CDK8S] ERROR DECRYPTING SECRET, CHECK AGE KEYS.'.red
       end
       puts "[ERROR][CDK8S] #{result}".red
+      puts result.err.red
       exit 1
     end
 
