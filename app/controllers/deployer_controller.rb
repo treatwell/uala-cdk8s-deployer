@@ -258,9 +258,7 @@ class DeployerController
       puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
       puts env if ENV['DEBUG'] == 'true'
       settings = env['settings']
-      projects = []
       project_id = ""
-      project_namespaces = []
       auth_data = settings['auth_data']
 
       ENV["KUBECONFIG"] = auth_data

@@ -30,7 +30,7 @@ module Utilities
   def get_line_ascii_table(columns_length, line, header)
     row = header ? {} : []
     columns_length.each_with_index do |i, index|
-      column, part2 = line.slice!(0...i), line
+      column, _part2 = line.slice!(0...i), line
       if header
         row[header[index]] = column.strip!
       else
