@@ -143,64 +143,6 @@ module Utilities
     projects
   end
 
-  def rancher_select_project(settings, projects)
-    puts "Try to select Project '#{settings['rancher_project']}' on cluster '#{settings['cluster_name']}'...".green
-
-    found_project = projects.detect do |project|
-      project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-    end
-
-    unless found_project
-      puts "[WARN] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name'] }'. Trying to create it...".yellow
-      default_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == 'Default'
-      end
-      unless default_project
-        puts "[ERROR] Project \"Default\" doesn't exist on cluster '#{settings['cluster_name']}' or cluster '#{settings['cluster_name']}' doesn't exist.".red
-        exit 1
-      end
-
-      result = shell.run!("rancher context switch #{default_project['PROJECT ID']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-
-      result = shell.run!("rancher projects create --cluster #{settings['cluster_name']} #{settings['rancher_project']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-PROJECT] #{result.err}".red
-        exit 1
-      end
-
-      puts "Project '#{settings['rancher_project']}' created on cluster '#{settings['cluster_name']}'.".green
-
-      # refresh projects and found_project
-      result = shell.run!("echo '\n' | rancher context switch")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-      projects = ascii_table_to_array(result.out)
-      found_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-      end
-      unless found_project
-        puts "[ERR] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name']}' also after create it.".red
-        exit 1
-      end
-    end
-
-    result = shell.run!("rancher context switch #{found_project['PROJECT ID']}")
-    if result.failed?
-      puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-      exit 1
-    end
-
-    puts 'PROJECT SELECTED.'
-
-    found_project['PROJECT ID']
-  end
-
   def rancher_list_ns
     result = shell.run!('rancher namespaces')
     # puts result

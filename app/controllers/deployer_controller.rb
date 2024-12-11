@@ -207,7 +207,6 @@ class DeployerController
               settings['rancher_secret_key'] = settings['auth_data']['SECRET_KEY']
             end
           end
-          settings['rancher_project'] = cl_app['settings']['rancher_project']
           # add env only if not already exists
           @envs_to_deploy |= [{
             'name'         => cl_app['name'],
@@ -282,7 +281,6 @@ class DeployerController
 
       if settings['rancher_url']
         projects = Utilities.rancher_login(settings)
-        project_id = Utilities.rancher_select_project(settings, projects)
         project_namespaces = Utilities.rancher_list_ns
       end
 
