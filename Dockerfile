@@ -7,8 +7,11 @@ RUN apt-get update -qq && \
     apt-get upgrade -y && \
     apt-get install --no-install-recommends -y \
     apt-transport-https \
-    git curl unzip \
+    git \
+    curl \
+    unzip \
     groff \
+    build-essential \
     libssl-dev \
     libcurl4-openssl-dev
 
