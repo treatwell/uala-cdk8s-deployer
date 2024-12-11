@@ -125,16 +125,4 @@ module Utilities
 
     "#{server_version['major']}.#{server_version['minor'].gsub(/[^\d*]/, '')}"
   end
-
-  def rancher_list_ns
-    result = shell.run!('rancher namespaces')
-    # puts result
-    if result.failed?
-      puts "[ERROR][RANCHER-NS] #{result.err}".red
-      exit 1
-    end
-
-    ascii_table_to_array(result.out)
-  end
-
 end
