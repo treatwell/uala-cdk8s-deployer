@@ -202,7 +202,6 @@ class DeployerController
             settings['auth_data'] = auth_method[:data]
 
             if settings['auth_mode'] == "RANCHER" && settings['auth_data']['SERVER_URL']
-              settings['rancher_prefix'] = "rancher "
               settings['rancher_url'] = settings['auth_data']['SERVER_URL']
               settings['rancher_access_key'] = settings['auth_data']['ACCESS_KEY']
               settings['rancher_secret_key'] = settings['auth_data']['SECRET_KEY']
@@ -352,7 +351,6 @@ class DeployerController
   def _build_cluster_environments(cluster, envs)
     envs_cdk8s = envs.map { |e| e['name'] }.join(',')
     auth_mode = envs[0]['settings']['auth_mode']
-    rancher_prefix = envs[0]['settings']['rancher_prefix']
 
     puts "\nRun cdk8s for '#{envs_cdk8s}' on cluster '#{cluster}'...".green
     cluster_version = Utilities.get_cluster_version(auth_mode)
@@ -387,7 +385,6 @@ class DeployerController
       puts "\nDeploying '#{env['name']}' to cluster '#{cluster}'...".green
 
       auth_mode = env['settings']['auth_mode']
-      rancher_prefix = env['settings']['rancher_prefix']
       namespace_yaml = "iac-repo/applications/dist/*-namespaces-#{env['name']}.k8s.yaml"
       env_compiled_yamls = yaml_files.select { |f| env['namespaces'].any? { |n| f.include?(n) } }.sort
 
@@ -416,7 +413,7 @@ class DeployerController
       end
 
       puts "\nApplying namespaces...".green
-      result = Utilities.shell_to_output.run!("#{rancher_prefix}kubectl apply #{dry_run} -f #{namespace_yaml}")
+      result = Utilities.shell_to_output.run!("kubectl apply #{dry_run} -f #{namespace_yaml}")
 
       if result.failed?
         puts "[ERROR][#{auth_mode}] #{result.err}".red
@@ -426,7 +423,7 @@ class DeployerController
       # kubectl apply for namespaces of this environment by name (ex. *-namespaces-{environment_name}.k8s.yaml)
       env_compiled_yamls.each do |yaml|
         puts "\nAppling #{yaml}...".green
-        result = Utilities.shell_to_output.run!("#{rancher_prefix}kubectl apply #{dry_run} -f #{yaml}")
+        result = Utilities.shell_to_output.run!("kubectl apply #{dry_run} -f #{yaml}")
 
         if result.failed?
           puts "[ERROR][#{auth_mode}] #{result.err}".red
