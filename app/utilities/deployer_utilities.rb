@@ -126,23 +126,6 @@ module Utilities
     "#{server_version['major']}.#{server_version['minor'].gsub(/[^\d*]/, '')}"
   end
 
-  def rancher_login(settings)
-    result = shell.run!("echo '1' | rancher login #{settings['rancher_url']} -t #{settings['rancher_access_key']}:#{settings['rancher_secret_key']}")
-
-    if result.failed?
-      puts "[ERROR][RANCHER-LOGIN] #{result.err}".red
-      exit 1
-    end
-
-    if result.out.include?('CLUSTER NAME')
-      puts "LOGGED IN TO #{settings['rancher_url']}."
-
-      projects = ascii_table_to_array(result.out)
-    end
-
-    projects
-  end
-
   def rancher_list_ns
     result = shell.run!('rancher namespaces')
     # puts result

@@ -269,11 +269,6 @@ class DeployerController
         puts 'OK.'.green
       end
 
-      if settings['rancher_url']
-        projects = Utilities.rancher_login(settings)
-        project_namespaces = Utilities.rancher_list_ns
-      end
-
       # search environment namespaces
       all_namespaces = []
       namespaces = []
