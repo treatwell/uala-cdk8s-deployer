@@ -67,7 +67,6 @@ module Utilities
   end
 
   def get_cluster_auth_method(settings)
-    puts "Get cluster '#{settings['cluster_name']}' auth method..."
     if (settings.key?('secret') && !settings['secret'].empty?)
       puts "Found a secret, trying to decode it..."
       result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")
@@ -104,13 +103,10 @@ module Utilities
         puts 'OK.'.green
         return { data: path }
       end
-      if yaml_content["data"]["RANCHER"]
-        puts "Found a rancher setup in the secret, we'll using it."
-        return { data: yaml_content["data"]["RANCHER"] }
-      end
+    else
+      puts '[ERROR][CLUSTER-AUTH-CREDENTIALS] Missing credentials to authenticate to the cluster.'.red
+      exit 1
     end
-    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".yellow
-    return { data: "" }
   end
 
   def get_cluster_version
