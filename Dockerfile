@@ -1,6 +1,4 @@
 # hadolint global ignore=DL3008,DL3009
-FROM rancher/cli2:v2.7.0 as ranchercli
-
 FROM ruby:3.3-slim-bookworm AS ruby
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -28,9 +26,6 @@ RUN echo "deb  [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesour
 
 RUN node -v && \
     npm -v
-
-# install rancher CLI
-COPY --from=ranchercli /usr/bin/rancher /usr/local/bin
 
 # install aws CLI
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \

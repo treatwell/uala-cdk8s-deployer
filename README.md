@@ -16,7 +16,7 @@ In order to use this tool, some environment variables are required:
 * `DEPLOY_ENVIRONMENTS`: A comma list of environments you want to deploy (see also conf file)
 * `DEPLOY_AGE_KEYS`: A comma list of age keys used to decrypt secrets (see also conf file)
 * `DEPLOY_CONF_FILE`: relative path name of the config file (ex. `conf.yaml`)
-* `DEPLOY_DRY_RUN`: Simulate the k8s deploy with a dry run. Available values are `client` (or `true`) and `server`. Attention: with Rancher a dry run will create anyway the project and namespaces, due to a limitation on RBAC
+* `DEPLOY_DRY_RUN`: Simulate the k8s deploy with a dry run. Available values are `client` (or `true`) and `server`
 * `DEPLOY_ASK_CONFIRM`: Ask for a user confirm before deploy (ex. `true`)
 
 You can run it with docker with:
@@ -57,11 +57,7 @@ clusters:
       secret: clusters/aws-test-version.enc.yaml
     environments:
       - name: "develop"
-        settings:
-          rancher_project: "test-iac"
       - name: "production"
-        settings:
-          rancher_project: "test-iac-prod"
 ```
 
 In the example above, the tool expects there are 2 environments in these paths:
@@ -74,10 +70,9 @@ applications/environments/production
 
 * `name`: It contains the exactly name of the cluster
 * `environments`: A list of environments the cluster should contain, based on the structure of the Iac Repo
-* `settings`: Useful settings for the tool, like secret credentials and rancher project. This section can exist at cluster level or at application level, missing informations will be merged with cluster ones.
+* `settings`: Useful settings for the tool, like secret credentials. This section can exist at cluster level or at application level, missing informations will be merged with cluster ones.
 
 In setting sections the tool expects to find how can access the cluster and how to deploy.
-In the example above, the tool will use the secret to connect to the cluster and deploy environments to the specific Rancher Project defined.
 
 In the `secret` field you have to specify the path where to find a secret with the auth method.
 The secret should be encrypted with `sops` and should have the following structure:
@@ -94,15 +89,11 @@ data:
         AWS_ACCESS_KEY_ID: YOUR_IAM_ACCESS_KEY
         AWS_SECRET_ACCESS_KEY: YOUR_IAM_SECRET_KEY
         AWS_DEFAULT_REGION: eu-west-1
-    RANCHER:
-        SERVER_URL: https://your.rancherinstance.com
-        ACCESS_KEY: token-rancher
-        SECRET_KEY: rancher-secret
 ```
+
 As you can see the tool supports 3 different auth methods in the secret:
 * Plain kubeconfig
 * AWS IAM User with access to eks and to the cluster (a kubeconfig will be generated in realtime)
-* Rancher Credentials
 
 The tool will use only one of the three methods defined in the above order, no fallback is supported atm.
 
