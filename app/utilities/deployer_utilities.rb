@@ -113,11 +113,11 @@ module Utilities
     return { auth_mode: "RANCHER", data: "" }
   end
 
-  def get_cluster_version(auth_mode)
+  def get_cluster_version
     result = shell.run!("kubectl version --output=json")
 
     if result.failed?
-      puts "[ERROR][#{auth_mode}] #{result.err}".red
+      puts "[ERROR] #{result.err}".red
       exit 1
     end
 

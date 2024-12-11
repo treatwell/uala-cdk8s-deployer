@@ -274,7 +274,7 @@ class DeployerController
       if auth_mode == "KUBECTL"
         ENV["KUBECONFIG"] = auth_data
         print "Test cluster connection with kubectl... "
-        if Utilities.get_cluster_version(auth_mode)
+        if Utilities.get_cluster_version
           puts 'OK.'.green
         end
       end
@@ -351,7 +351,7 @@ class DeployerController
     auth_mode = envs[0]['settings']['auth_mode']
 
     puts "\nRun cdk8s for '#{envs_cdk8s}' on cluster '#{cluster}'...".green
-    cluster_version = Utilities.get_cluster_version(auth_mode)
+    cluster_version = Utilities.get_cluster_version
     puts "Cluster version: #{cluster_version}".yellow
     result = Utilities.shell.run!(
       'cd iac-repo/applications/ && npm run build',
