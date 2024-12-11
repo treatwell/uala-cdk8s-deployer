@@ -276,7 +276,7 @@ class DeployerController
       if auth_mode == "KUBECTL"
         ENV["KUBECONFIG"] = auth_data
         print "Test cluster connection with kubectl... "
-        if Utilities.get_cluster_version("", auth_mode)
+        if Utilities.get_cluster_version(auth_mode)
           puts 'OK.'.green
         end
       end
@@ -355,7 +355,7 @@ class DeployerController
     rancher_prefix = envs[0]['settings']['rancher_prefix']
 
     puts "\nRun cdk8s for '#{envs_cdk8s}' on cluster '#{cluster}'...".green
-    cluster_version = Utilities.get_cluster_version(rancher_prefix, auth_mode)
+    cluster_version = Utilities.get_cluster_version(auth_mode)
     puts "Cluster version: #{cluster_version}".yellow
     result = Utilities.shell.run!(
       'cd iac-repo/applications/ && npm run build',
