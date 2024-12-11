@@ -9,7 +9,7 @@ require 'colorize'
 require 'logger'
 require 'tty-command'
 require 'json'
-require_relative '../utilities/hash'
+require 'active_support/core_ext/object/deep_dup'
 require_relative '../utilities/deployer_utilities'
 
 class DeployerController
