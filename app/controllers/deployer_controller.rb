@@ -151,7 +151,7 @@ class DeployerController
 
     _announce_substep "Helm dependencies installed."
 
-    result = Utilities.shell.run!('cd iac-repo/applications/ && npm install')
+    result = Utilities.shell.run!('npm install', chdir: 'iac-repo/applications')
     if result.failed?
       puts "[ERROR][CDK8S-INSTALL] #{result.err}".red
       exit 1
