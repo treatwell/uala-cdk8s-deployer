@@ -9,7 +9,7 @@ require 'colorize'
 require 'logger'
 require 'tty-command'
 require 'json'
-require_relative '../utilities/hash'
+require 'active_support/core_ext/object/deep_dup'
 require_relative '../utilities/deployer_utilities'
 
 class DeployerController
@@ -198,17 +198,8 @@ class DeployerController
 
             auth_method = Utilities.get_cluster_auth_method(settings)
 
-            settings['auth_mode'] = auth_method[:auth_mode]
             settings['auth_data'] = auth_method[:data]
-
-            if settings['auth_mode'] == "RANCHER" && settings['auth_data']['SERVER_URL']
-              settings['rancher_prefix'] = "rancher "
-              settings['rancher_url'] = settings['auth_data']['SERVER_URL']
-              settings['rancher_access_key'] = settings['auth_data']['ACCESS_KEY']
-              settings['rancher_secret_key'] = settings['auth_data']['SECRET_KEY']
-            end
           end
-          settings['rancher_project'] = cl_app['settings']['rancher_project']
           # add env only if not already exists
           @envs_to_deploy |= [{
             'name'         => cl_app['name'],
@@ -267,24 +258,13 @@ class DeployerController
       puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
       puts env if ENV['DEBUG'] == 'true'
       settings = env['settings']
-      projects = []
       project_id = ""
-      project_namespaces = []
-      auth_mode = settings['auth_mode']
       auth_data = settings['auth_data']
 
-      if auth_mode == "KUBECTL"
-        ENV["KUBECONFIG"] = auth_data
-        print "Test cluster connection with kubectl... "
-        if Utilities.get_cluster_version("", auth_mode)
-          puts 'OK.'.green
-        end
-      end
-
-      if settings['rancher_url']
-        projects = Utilities.rancher_login(settings)
-        project_id = Utilities.rancher_select_project(settings, projects)
-        project_namespaces = Utilities.rancher_list_ns
+      ENV["KUBECONFIG"] = auth_data
+      print "Test cluster connection with kubectl... "
+      if Utilities.get_cluster_version
+        puts 'OK.'.green
       end
 
       # search environment namespaces
@@ -324,26 +304,6 @@ class DeployerController
         exit 1
       end
 
-      if auth_mode == "RANCHER"
-        puts "\nCreate environment namespaces on project #{project_id}...".green
-        namespaces.each do |namespace|
-          # if we are using rancher, we have to create namespaces with rancher cli, otherwise
-          # credentials limited to a specific project (no cluster scope roles) cannot create namespaces with yaml
-          print "Check namespace '#{namespace}' existance... "
-          found_namespace = project_namespaces.detect { |proj_namespace| proj_namespace['NAME'] == namespace }
-          unless found_namespace
-            result = Utilities.shell_to_output.run!("rancher namespaces create #{namespace}")
-            if result.failed?
-              puts "[ERROR][RANCHER-NS] #{result.err}".red
-              exit 1
-            end
-            puts 'Namespace created.'.green
-          else
-            puts 'OK.'.green
-          end
-        end
-      end
-
       env['namespaces'] = namespaces
       env['all_namespaces'] = all_namespaces
     end
@@ -351,11 +311,9 @@ class DeployerController
 
   def _build_cluster_environments(cluster, envs)
     envs_cdk8s = envs.map { |e| e['name'] }.join(',')
-    auth_mode = envs[0]['settings']['auth_mode']
-    rancher_prefix = envs[0]['settings']['rancher_prefix']
 
     puts "\nRun cdk8s for '#{envs_cdk8s}' on cluster '#{cluster}'...".green
-    cluster_version = Utilities.get_cluster_version(rancher_prefix, auth_mode)
+    cluster_version = Utilities.get_cluster_version
     puts "Cluster version: #{cluster_version}".yellow
     result = Utilities.shell.run!(
       'cd iac-repo/applications/ && npm run build',
@@ -386,8 +344,6 @@ class DeployerController
     envs.each do |env|
       puts "\nDeploying '#{env['name']}' to cluster '#{cluster}'...".green
 
-      auth_mode = env['settings']['auth_mode']
-      rancher_prefix = env['settings']['rancher_prefix']
       namespace_yaml = "iac-repo/applications/dist/*-namespaces-#{env['name']}.k8s.yaml"
       env_compiled_yamls = yaml_files.select { |f| env['namespaces'].any? { |n| f.include?(n) } }.sort
 
@@ -416,20 +372,20 @@ class DeployerController
       end
 
       puts "\nApplying namespaces...".green
-      result = Utilities.shell_to_output.run!("#{rancher_prefix}kubectl apply #{dry_run} -f #{namespace_yaml}")
+      result = Utilities.shell_to_output.run!("kubectl apply #{dry_run} -f #{namespace_yaml}")
 
       if result.failed?
-        puts "[ERROR][#{auth_mode}] #{result.err}".red
+        puts "[ERROR] #{result.err}".red
         exit 1
       end
 
       # kubectl apply for namespaces of this environment by name (ex. *-namespaces-{environment_name}.k8s.yaml)
       env_compiled_yamls.each do |yaml|
         puts "\nAppling #{yaml}...".green
-        result = Utilities.shell_to_output.run!("#{rancher_prefix}kubectl apply #{dry_run} -f #{yaml}")
+        result = Utilities.shell_to_output.run!("kubectl apply #{dry_run} -f #{yaml}")
 
         if result.failed?
-          puts "[ERROR][#{auth_mode}] #{result.err}".red
+          puts "[ERROR] #{result.err}".red
           exit 1
         end
       end

@@ -30,7 +30,7 @@ module Utilities
   def get_line_ascii_table(columns_length, line, header)
     row = header ? {} : []
     columns_length.each_with_index do |i, index|
-      column, part2 = line.slice!(0...i), line
+      column, _part2 = line.slice!(0...i), line
       if header
         row[header[index]] = column.strip!
       else
@@ -67,7 +67,6 @@ module Utilities
   end
 
   def get_cluster_auth_method(settings)
-    puts "Get cluster '#{settings['cluster_name']}' auth method..."
     if (settings.key?('secret') && !settings['secret'].empty?)
       puts "Found a secret, trying to decode it..."
       result = shell.run!("sops -d ./iac-repo/#{settings['secret']}")
@@ -83,7 +82,7 @@ module Utilities
         File.open("#{path}", 'w') do |file|
           file.write(yaml_content["data"]["KUBE_CONFIG"])
         end
-        return { auth_mode: "KUBECTL", data: path }
+        return { data: path }
       end
       if yaml_content["data"]["IAM_USER"]
         print "Found a iam_user, trying to get a kubeconfig... "
@@ -102,22 +101,19 @@ module Utilities
           exit 1
         end
         puts 'OK.'.green
-        return { auth_mode: "KUBECTL", data: path }
+        return { data: path }
       end
-      if yaml_content["data"]["RANCHER"]
-        puts "Found a rancher setup in the secret, we'll using it."
-        return { auth_mode: "RANCHER", data: yaml_content["data"]["RANCHER"] }
-      end
+    else
+      puts '[ERROR][CLUSTER-AUTH-CREDENTIALS] Missing credentials to authenticate to the cluster.'.red
+      exit 1
     end
-    puts "[WARNING][GET-AUTH] Using plain rancher credentials instead of a secret is deprecated, please update your configuration.".yellow
-    return { auth_mode: "RANCHER", data: "" }
   end
 
-  def get_cluster_version(rancher_prefix, auth_mode)
-    result = shell.run!("#{rancher_prefix}kubectl version --output=json")
+  def get_cluster_version
+    result = shell.run!("kubectl version --output=json")
 
     if result.failed?
-      puts "[ERROR][#{auth_mode}] #{result.err}".red
+      puts "[ERROR] #{result.err}".red
       exit 1
     end
 
@@ -125,91 +121,4 @@ module Utilities
 
     "#{server_version['major']}.#{server_version['minor'].gsub(/[^\d*]/, '')}"
   end
-
-  def rancher_login(settings)
-    result = shell.run!("echo '1' | rancher login #{settings['rancher_url']} -t #{settings['rancher_access_key']}:#{settings['rancher_secret_key']}")
-
-    if result.failed?
-      puts "[ERROR][RANCHER-LOGIN] #{result.err}".red
-      exit 1
-    end
-
-    if result.out.include?('CLUSTER NAME')
-      puts "LOGGED IN TO #{settings['rancher_url']}."
-
-      projects = ascii_table_to_array(result.out)
-    end
-
-    projects
-  end
-
-  def rancher_select_project(settings, projects)
-    puts "Try to select Project '#{settings['rancher_project']}' on cluster '#{settings['cluster_name']}'...".green
-
-    found_project = projects.detect do |project|
-      project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-    end
-
-    unless found_project
-      puts "[WARN] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name'] }'. Trying to create it...".yellow
-      default_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == 'Default'
-      end
-      unless default_project
-        puts "[ERROR] Project \"Default\" doesn't exist on cluster '#{settings['cluster_name']}' or cluster '#{settings['cluster_name']}' doesn't exist.".red
-        exit 1
-      end
-
-      result = shell.run!("rancher context switch #{default_project['PROJECT ID']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-
-      result = shell.run!("rancher projects create --cluster #{settings['cluster_name']} #{settings['rancher_project']}")
-      if result.failed?
-        puts "[ERROR][RANCHER-PROJECT] #{result.err}".red
-        exit 1
-      end
-
-      puts "Project '#{settings['rancher_project']}' created on cluster '#{settings['cluster_name']}'.".green
-
-      # refresh projects and found_project
-      result = shell.run!("echo '\n' | rancher context switch")
-      if result.failed?
-        puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-        exit 1
-      end
-      projects = ascii_table_to_array(result.out)
-      found_project = projects.detect do |project|
-        project['CLUSTER NAME'] == settings['cluster_name'] && project['PROJECT NAME'] == settings['rancher_project']
-      end
-      unless found_project
-        puts "[ERR] Project '#{settings['rancher_project']}' doesn't exist on cluster '#{settings['cluster_name']}' also after create it.".red
-        exit 1
-      end
-    end
-
-    result = shell.run!("rancher context switch #{found_project['PROJECT ID']}")
-    if result.failed?
-      puts "[ERROR][RANCHER-CONTEXT] #{result.err}".red
-      exit 1
-    end
-
-    puts 'PROJECT SELECTED.'
-
-    found_project['PROJECT ID']
-  end
-
-  def rancher_list_ns
-    result = shell.run!('rancher namespaces')
-    # puts result
-    if result.failed?
-      puts "[ERROR][RANCHER-NS] #{result.err}".red
-      exit 1
-    end
-
-    ascii_table_to_array(result.out)
-  end
-
 end
