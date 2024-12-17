@@ -1,8 +1,6 @@
 # hadolint global ignore=DL3008,DL3009
 FROM ruby:3.3-slim-bookworm
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
 RUN apt-get update -qq && \
     apt-get upgrade -y && \
     apt-get install --no-install-recommends -y \
@@ -17,14 +15,16 @@ RUN apt-get update -qq && \
 
 # Install Node.js via NVM (Node Version Manager)
 ENV NVM_VERSION=v0.40.1
-RUN curl -fsSL -o install_nvm.sh "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" && \
+RUN curl -fsSL -o install_nvm.sh "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh" && \
     chmod 700 install_nvm.sh && \
     ./install_nvm.sh && \
     rm install_nvm.sh && \
     export NVM_DIR="$HOME/.nvm" && \
     . "$NVM_DIR/nvm.sh" && \
     nvm install --lts --default --save && \
-    nvm install-latest-npm
+    nvm install-latest-npm && \
+    ln -s $NVM_BIN /usr/local/bin/nvm-node
+ENV PATH=/usr/local/bin/nvm-node:$PATH
 
 # install aws CLI
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
