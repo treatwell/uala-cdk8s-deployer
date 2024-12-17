@@ -193,7 +193,10 @@ class DeployerController
           environment_name = env.keys[0]
           next unless environment_name == cl_app['name']
           unless settings = @envs_to_deploy.find{ |x| x['settings']['cluster_name'] == cluster['name'] }&.dig('settings')&.deep_dup
-            settings = cluster['settings'].merge(cl_app['settings'])
+            settings = cluster['settings'] || {}
+
+            settings.update(cl_app['settings']) if cl_app['settings']
+
             settings['cluster_name'] = cluster['name']
 
             auth_method = Utilities.get_cluster_auth_method(settings)
