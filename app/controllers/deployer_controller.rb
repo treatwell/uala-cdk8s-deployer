@@ -232,7 +232,7 @@ class DeployerController
     _announce_step "Deploy environments..."
     # each for clusters
     @envs_to_deploy.group_by { |e| e['cluster'] }.each do |cluster, envs|
-      # preparing environments for this cluster and set up project id in codebase
+      # preparing environments for this cluster
       _prepare_cluster_environments(cluster, envs)
 
       # run cdk8s for current cluster environments
@@ -261,7 +261,6 @@ class DeployerController
       puts "\nPreparing '#{env['name']}' to be deployed on cluster '#{cluster}'...".green
       puts env if ENV['DEBUG'] == 'true'
       settings = env['settings']
-      project_id = ""
       auth_data = settings['auth_data']
 
       ENV["KUBECONFIG"] = auth_data
@@ -277,7 +276,7 @@ class DeployerController
         yaml_content = YAML.safe_load(yaml_file)
         # puts yaml_content.to_yaml
         yaml_content.each do |app, settings|
-          next if yaml_content[app].is_a?(String) || !yaml_content[app].key?('projectId')
+          next if yaml_content[app].is_a?(String)
 
           if !env['applications'] || (
               env['applications'] &&
@@ -287,10 +286,6 @@ class DeployerController
             namespaces.push(settings['namespace'])
           end
           all_namespaces.push(settings['namespace'])
-          # Add projectId to any namespace of the environment if it's empty
-          if yaml_content[app]['projectId'].to_s.strip.empty? && project_id
-            yaml_content[app]['projectId'] = project_id
-          end
         end
 
         # puts yaml_content.to_yaml
