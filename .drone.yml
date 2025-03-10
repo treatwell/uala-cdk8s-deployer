@@ -35,12 +35,12 @@ steps:
     image: plugins/docker
     pull: if-not-exists
     settings:
-      repo: ${DRONE_REPO,,}
+      repo: uala/cdk8s-deployer
       tags:
         - ${DRONE_SOURCE_BRANCH/\//-}
         - ${DRONE_SOURCE_BRANCH/\//-}-${DRONE_COMMIT_SHA:0:8}
       cache_from:
-        - ${DRONE_REPO,,}:${DRONE_SOURCE_BRANCH/\//-}
+        - uala/cdk8s-deployer:${DRONE_SOURCE_BRANCH/\//-}
       username:
         from_secret: DOCKER_USERNAME
       password:
@@ -54,11 +54,11 @@ steps:
     image: plugins/docker
     pull: if-not-exists
     settings:
-      repo: ${DRONE_REPO,,}
+      repo: uala/cdk8s-deployer
       tags:
         - ${DRONE_TAG/\//-}
       cache_from:
-        - ${DRONE_REPO,,}:master-${DRONE_COMMIT_SHA:0:8}
+        - uala/cdk8s-deployer:master-${DRONE_COMMIT_SHA:0:8}
       username:
         from_secret: DOCKER_USERNAME
       password:
